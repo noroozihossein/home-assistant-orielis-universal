@@ -1,0 +1,2869 @@
+blueprint:
+  source_url: https://github.com/noroozihossein/home-assistant-orielis-universal/blob/main/mrsmart_orielis_universal.yaml
+  name: Mr Smart — Orielis Three-Mode Universal Controller v0.3.0
+  description: 'Mode 1 GREEN and Mode 2 BLUE each have four independent universal profiles; Scene RED has four independent
+    action buttons and no rotation. Select control type first, then targets, grouping, steps and optional custom
+    overrides. The remote selects its hardware mode; this blueprint routes each actual event automatically. No helpers
+    or fixed Zigbee group IDs. Synchronized uses the first eligible target as reference per property and common
+    member limits; Relative preserves individual levels. Mixed domains are handled separately. Off lights remain
+    excluded from rotation unless wake_lights is enabled. Custom actions override automatic handling. Green on/off
+    and Blue start/stop map to audio play/pause; Blue cover start/stop maps to open/STOP. Climate built-ins adjust
+    a single setpoint; use custom actions for HVAC modes/power. Numerical target resolution may affect reported
+    values. Play/pause commands do not create multiroom clock or track synchronization. One automation per remote.
+    Migration from v0.2.1: existing targets/steps/grouping belong to GREEN; BLUE targets start empty and must be
+    selected separately. Existing event-specific overrides and RED actions keep their IDs. Supports only commands
+    actually sent by the remote. The tested device required initial setup on a Tuya hub before light/curtain commands
+    worked; this is not proven universal. Software-tested release; confirm hardware behavior before publication.'
+  domain: automation
+  author: Mr Smart
+  homeassistant:
+    min_version: 2024.12.5
+  input:
+    connection:
+      name: Controller
+      icon: mdi:knob
+      input:
+        orielis_device:
+          name: Orielis remote
+          description: Select the Orielis TS0601 device. Create one automation per remote.
+          selector:
+            device:
+              filter:
+              - integration: mqtt
+              multiple: false
+        enabled:
+          name: Enabled
+          default: true
+          selector:
+            boolean: {}
+        wake_lights:
+          name: Rotation may turn on an off light
+          default: false
+          selector:
+            boolean: {}
+        event_cooldown:
+          name: Minimum interval after an event (seconds)
+          description: Drops input during this brief interval; prevents a queue of old rotations. Increase if the
+            target reports slowly.
+          default: 0.15
+          selector:
+            number:
+              min: 0
+              max: 2
+              step: 0.05
+              mode: box
+    green_1:
+      name: Mode 1 — GREEN LED — Channel 1 (top / 12)
+      description: Independent green profile. Hardware mode names do not restrict the target category. On/off =
+        light power / audio play-pause / cover open-close. Normal rotation uses the selected function; colortemp
+        events control CCT / audio tracks.
+      collapsed: true
+      input:
+        channel_1_usage:
+          name: Control type
+          description: Choose a target category, or Automatic / mixed to dispatch by entity domain. Custom actions
+            bypass automatic control. Climate defaults change a single target temperature only; assign power/mode
+            actions explicitly if needed.
+          default: auto
+          selector:
+            select:
+              options:
+              - label: Automatic / mixed targets
+                value: auto
+              - label: Lighting
+                value: light
+              - label: Audio / music
+                value: media_player
+              - label: Curtains / blinds
+                value: cover
+              - label: Climate setpoint
+                value: climate
+              - label: Numeric controls
+                value: numeric
+              - label: Custom actions only
+                value: custom
+        channel_1_targets:
+          name: Targets
+          description: Any combination of lights, media players, covers, climate or number entities.
+          default: []
+          selector:
+            entity:
+              filter:
+              - domain: light
+              - domain: media_player
+              - domain: cover
+              - domain: climate
+              - domain: number
+              - domain: input_number
+              multiple: true
+        channel_1_group_mode:
+          name: Group mode — Synchronized / Relative
+          description: 'Synchronized: same requested level per property, using the first eligible target as reference.
+            Relative: adjust each target from its own level. Selection applies only to this channel.'
+          default: relative
+          selector:
+            select:
+              options:
+              - label: Synchronized — common level
+                value: synchronized
+              - label: Relative — individual levels
+                value: relative
+        channel_1_brightness_step:
+          name: Brightness step
+          default: 5
+          selector:
+            number:
+              min: 1
+              max: 100
+              step: 1
+              mode: box
+              unit_of_measurement: '%'
+        channel_1_cct_step:
+          name: CCT step (Kelvin)
+          default: 150
+          selector:
+            number:
+              min: 25
+              max: 2000
+              step: 25
+              mode: box
+              unit_of_measurement: K
+        channel_1_volume_step:
+          name: Volume step
+          default: 5
+          selector:
+            number:
+              min: 1
+              max: 100
+              step: 1
+              mode: box
+              unit_of_measurement: '%'
+        channel_1_cover_step:
+          name: Cover-position step
+          default: 10
+          selector:
+            number:
+              min: 1
+              max: 100
+              step: 1
+              mode: box
+              unit_of_measurement: '%'
+        channel_1_temperature_step:
+          name: Climate temperature step
+          default: 0.5
+          selector:
+            number:
+              min: 0.1
+              max: 10
+              step: 0.1
+              mode: box
+        channel_1_numeric_step:
+          name: Number step
+          default: 1
+          selector:
+            number:
+              min: 0.01
+              max: 1000
+              step: 0.01
+              mode: box
+        channel_1_reverse:
+          name: Reverse increase/decrease direction
+          default: false
+          selector:
+            boolean: {}
+        channel_1_rotation:
+          name: Rotation function
+          description: Select what normal rotation controls. The separate colortemp gesture remains CCT / next-previous
+            track. Custom overrides use the original event names.
+          default: primary
+          selector:
+            select:
+              options:
+              - label: Primary level control
+                value: primary
+              - label: Secondary — CCT / audio tracks
+                value: secondary
+        channel_1_custom_press:
+          name: On — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_1_on_enabled:
+          name: On — enabled
+          default: true
+          selector:
+            boolean: {}
+        channel_1_custom_off:
+          name: Off — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_1_off_enabled:
+          name: Off — enabled
+          default: true
+          selector:
+            boolean: {}
+        channel_1_custom_brightness_up:
+          name: Brightness Up — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_1_brightness_up_enabled:
+          name: Brightness Up — enabled
+          default: true
+          selector:
+            boolean: {}
+        channel_1_custom_brightness_down:
+          name: Brightness Down — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_1_brightness_down_enabled:
+          name: Brightness Down — enabled
+          default: true
+          selector:
+            boolean: {}
+        channel_1_custom_colortemp_up:
+          name: Colortemp Up — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_1_colortemp_up_enabled:
+          name: Colortemp Up — enabled
+          default: true
+          selector:
+            boolean: {}
+        channel_1_custom_colortemp_down:
+          name: Colortemp Down — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_1_colortemp_down_enabled:
+          name: Colortemp Down — enabled
+          default: true
+          selector:
+            boolean: {}
+    green_2:
+      name: Mode 1 — GREEN LED — Channel 2 (left / 9)
+      description: Independent green profile. Hardware mode names do not restrict the target category. On/off =
+        light power / audio play-pause / cover open-close. Normal rotation uses the selected function; colortemp
+        events control CCT / audio tracks.
+      collapsed: true
+      input:
+        channel_2_usage:
+          name: Control type
+          description: Choose a target category, or Automatic / mixed to dispatch by entity domain. Custom actions
+            bypass automatic control. Climate defaults change a single target temperature only; assign power/mode
+            actions explicitly if needed.
+          default: auto
+          selector:
+            select:
+              options:
+              - label: Automatic / mixed targets
+                value: auto
+              - label: Lighting
+                value: light
+              - label: Audio / music
+                value: media_player
+              - label: Curtains / blinds
+                value: cover
+              - label: Climate setpoint
+                value: climate
+              - label: Numeric controls
+                value: numeric
+              - label: Custom actions only
+                value: custom
+        channel_2_targets:
+          name: Targets
+          default: []
+          selector:
+            entity:
+              filter:
+              - domain: light
+              - domain: media_player
+              - domain: cover
+              - domain: climate
+              - domain: number
+              - domain: input_number
+              multiple: true
+        channel_2_group_mode:
+          name: Group mode — Synchronized / Relative
+          description: 'Synchronized: same requested level per property, using the first eligible target as reference.
+            Relative: adjust each target from its own level. Selection applies only to this channel.'
+          default: relative
+          selector:
+            select:
+              options:
+              - label: Synchronized — common level
+                value: synchronized
+              - label: Relative — individual levels
+                value: relative
+        channel_2_brightness_step:
+          name: Brightness step
+          default: 5
+          selector:
+            number:
+              min: 1
+              max: 100
+              step: 1
+              mode: box
+              unit_of_measurement: '%'
+        channel_2_cct_step:
+          name: CCT step (Kelvin)
+          default: 150
+          selector:
+            number:
+              min: 25
+              max: 2000
+              step: 25
+              mode: box
+              unit_of_measurement: K
+        channel_2_volume_step:
+          name: Volume step
+          default: 5
+          selector:
+            number:
+              min: 1
+              max: 100
+              step: 1
+              mode: box
+              unit_of_measurement: '%'
+        channel_2_cover_step:
+          name: Cover-position step
+          default: 10
+          selector:
+            number:
+              min: 1
+              max: 100
+              step: 1
+              mode: box
+              unit_of_measurement: '%'
+        channel_2_temperature_step:
+          name: Climate temperature step
+          default: 0.5
+          selector:
+            number:
+              min: 0.1
+              max: 10
+              step: 0.1
+              mode: box
+        channel_2_numeric_step:
+          name: Number step
+          default: 1
+          selector:
+            number:
+              min: 0.01
+              max: 1000
+              step: 0.01
+              mode: box
+        channel_2_reverse:
+          name: Reverse increase/decrease direction
+          default: false
+          selector:
+            boolean: {}
+        channel_2_rotation:
+          name: Rotation function
+          description: Select what normal rotation controls. The separate colortemp gesture remains CCT / next-previous
+            track. Custom overrides use the original event names.
+          default: primary
+          selector:
+            select:
+              options:
+              - label: Primary level control
+                value: primary
+              - label: Secondary — CCT / audio tracks
+                value: secondary
+        channel_2_custom_press:
+          name: On — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_2_on_enabled:
+          name: On — enabled
+          default: true
+          selector:
+            boolean: {}
+        channel_2_custom_off:
+          name: Off — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_2_off_enabled:
+          name: Off — enabled
+          default: true
+          selector:
+            boolean: {}
+        channel_2_custom_brightness_up:
+          name: Brightness Up — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_2_brightness_up_enabled:
+          name: Brightness Up — enabled
+          default: true
+          selector:
+            boolean: {}
+        channel_2_custom_brightness_down:
+          name: Brightness Down — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_2_brightness_down_enabled:
+          name: Brightness Down — enabled
+          default: true
+          selector:
+            boolean: {}
+        channel_2_custom_colortemp_up:
+          name: Colortemp Up — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_2_colortemp_up_enabled:
+          name: Colortemp Up — enabled
+          default: true
+          selector:
+            boolean: {}
+        channel_2_custom_colortemp_down:
+          name: Colortemp Down — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_2_colortemp_down_enabled:
+          name: Colortemp Down — enabled
+          default: true
+          selector:
+            boolean: {}
+    green_3:
+      name: Mode 1 — GREEN LED — Channel 3 (bottom / 6)
+      description: Independent green profile. Hardware mode names do not restrict the target category. On/off =
+        light power / audio play-pause / cover open-close. Normal rotation uses the selected function; colortemp
+        events control CCT / audio tracks.
+      collapsed: true
+      input:
+        channel_3_usage:
+          name: Control type
+          description: Choose a target category, or Automatic / mixed to dispatch by entity domain. Custom actions
+            bypass automatic control. Climate defaults change a single target temperature only; assign power/mode
+            actions explicitly if needed.
+          default: auto
+          selector:
+            select:
+              options:
+              - label: Automatic / mixed targets
+                value: auto
+              - label: Lighting
+                value: light
+              - label: Audio / music
+                value: media_player
+              - label: Curtains / blinds
+                value: cover
+              - label: Climate setpoint
+                value: climate
+              - label: Numeric controls
+                value: numeric
+              - label: Custom actions only
+                value: custom
+        channel_3_targets:
+          name: Targets
+          default: []
+          selector:
+            entity:
+              filter:
+              - domain: light
+              - domain: media_player
+              - domain: cover
+              - domain: climate
+              - domain: number
+              - domain: input_number
+              multiple: true
+        channel_3_group_mode:
+          name: Group mode — Synchronized / Relative
+          description: 'Synchronized: same requested level per property, using the first eligible target as reference.
+            Relative: adjust each target from its own level. Selection applies only to this channel.'
+          default: relative
+          selector:
+            select:
+              options:
+              - label: Synchronized — common level
+                value: synchronized
+              - label: Relative — individual levels
+                value: relative
+        channel_3_brightness_step:
+          name: Brightness step
+          default: 5
+          selector:
+            number:
+              min: 1
+              max: 100
+              step: 1
+              mode: box
+              unit_of_measurement: '%'
+        channel_3_cct_step:
+          name: CCT step (Kelvin)
+          default: 150
+          selector:
+            number:
+              min: 25
+              max: 2000
+              step: 25
+              mode: box
+              unit_of_measurement: K
+        channel_3_volume_step:
+          name: Volume step
+          default: 5
+          selector:
+            number:
+              min: 1
+              max: 100
+              step: 1
+              mode: box
+              unit_of_measurement: '%'
+        channel_3_cover_step:
+          name: Cover-position step
+          default: 10
+          selector:
+            number:
+              min: 1
+              max: 100
+              step: 1
+              mode: box
+              unit_of_measurement: '%'
+        channel_3_temperature_step:
+          name: Climate temperature step
+          default: 0.5
+          selector:
+            number:
+              min: 0.1
+              max: 10
+              step: 0.1
+              mode: box
+        channel_3_numeric_step:
+          name: Number step
+          default: 1
+          selector:
+            number:
+              min: 0.01
+              max: 1000
+              step: 0.01
+              mode: box
+        channel_3_reverse:
+          name: Reverse increase/decrease direction
+          default: false
+          selector:
+            boolean: {}
+        channel_3_rotation:
+          name: Rotation function
+          description: Select what normal rotation controls. The separate colortemp gesture remains CCT / next-previous
+            track. Custom overrides use the original event names.
+          default: primary
+          selector:
+            select:
+              options:
+              - label: Primary level control
+                value: primary
+              - label: Secondary — CCT / audio tracks
+                value: secondary
+        channel_3_custom_press:
+          name: On — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_3_on_enabled:
+          name: On — enabled
+          default: true
+          selector:
+            boolean: {}
+        channel_3_custom_off:
+          name: Off — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_3_off_enabled:
+          name: Off — enabled
+          default: true
+          selector:
+            boolean: {}
+        channel_3_custom_brightness_up:
+          name: Brightness Up — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_3_brightness_up_enabled:
+          name: Brightness Up — enabled
+          default: true
+          selector:
+            boolean: {}
+        channel_3_custom_brightness_down:
+          name: Brightness Down — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_3_brightness_down_enabled:
+          name: Brightness Down — enabled
+          default: true
+          selector:
+            boolean: {}
+        channel_3_custom_colortemp_up:
+          name: Colortemp Up — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_3_colortemp_up_enabled:
+          name: Colortemp Up — enabled
+          default: true
+          selector:
+            boolean: {}
+        channel_3_custom_colortemp_down:
+          name: Colortemp Down — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_3_colortemp_down_enabled:
+          name: Colortemp Down — enabled
+          default: true
+          selector:
+            boolean: {}
+    green_4:
+      name: Mode 1 — GREEN LED — Channel 4 (right / 3)
+      description: Independent green profile. Hardware mode names do not restrict the target category. On/off =
+        light power / audio play-pause / cover open-close. Normal rotation uses the selected function; colortemp
+        events control CCT / audio tracks.
+      collapsed: true
+      input:
+        channel_4_usage:
+          name: Control type
+          description: Choose a target category, or Automatic / mixed to dispatch by entity domain. Custom actions
+            bypass automatic control. Climate defaults change a single target temperature only; assign power/mode
+            actions explicitly if needed.
+          default: auto
+          selector:
+            select:
+              options:
+              - label: Automatic / mixed targets
+                value: auto
+              - label: Lighting
+                value: light
+              - label: Audio / music
+                value: media_player
+              - label: Curtains / blinds
+                value: cover
+              - label: Climate setpoint
+                value: climate
+              - label: Numeric controls
+                value: numeric
+              - label: Custom actions only
+                value: custom
+        channel_4_targets:
+          name: Targets
+          default: []
+          selector:
+            entity:
+              filter:
+              - domain: light
+              - domain: media_player
+              - domain: cover
+              - domain: climate
+              - domain: number
+              - domain: input_number
+              multiple: true
+        channel_4_group_mode:
+          name: Group mode — Synchronized / Relative
+          description: 'Synchronized: same requested level per property, using the first eligible target as reference.
+            Relative: adjust each target from its own level. Selection applies only to this channel.'
+          default: relative
+          selector:
+            select:
+              options:
+              - label: Synchronized — common level
+                value: synchronized
+              - label: Relative — individual levels
+                value: relative
+        channel_4_brightness_step:
+          name: Brightness step
+          default: 5
+          selector:
+            number:
+              min: 1
+              max: 100
+              step: 1
+              mode: box
+              unit_of_measurement: '%'
+        channel_4_cct_step:
+          name: CCT step (Kelvin)
+          default: 150
+          selector:
+            number:
+              min: 25
+              max: 2000
+              step: 25
+              mode: box
+              unit_of_measurement: K
+        channel_4_volume_step:
+          name: Volume step
+          default: 5
+          selector:
+            number:
+              min: 1
+              max: 100
+              step: 1
+              mode: box
+              unit_of_measurement: '%'
+        channel_4_cover_step:
+          name: Cover-position step
+          default: 10
+          selector:
+            number:
+              min: 1
+              max: 100
+              step: 1
+              mode: box
+              unit_of_measurement: '%'
+        channel_4_temperature_step:
+          name: Climate temperature step
+          default: 0.5
+          selector:
+            number:
+              min: 0.1
+              max: 10
+              step: 0.1
+              mode: box
+        channel_4_numeric_step:
+          name: Number step
+          default: 1
+          selector:
+            number:
+              min: 0.01
+              max: 1000
+              step: 0.01
+              mode: box
+        channel_4_reverse:
+          name: Reverse increase/decrease direction
+          default: false
+          selector:
+            boolean: {}
+        channel_4_rotation:
+          name: Rotation function
+          description: Select what normal rotation controls. The separate colortemp gesture remains CCT / next-previous
+            track. Custom overrides use the original event names.
+          default: primary
+          selector:
+            select:
+              options:
+              - label: Primary level control
+                value: primary
+              - label: Secondary — CCT / audio tracks
+                value: secondary
+        channel_4_custom_press:
+          name: On — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_4_on_enabled:
+          name: On — enabled
+          default: true
+          selector:
+            boolean: {}
+        channel_4_custom_off:
+          name: Off — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_4_off_enabled:
+          name: Off — enabled
+          default: true
+          selector:
+            boolean: {}
+        channel_4_custom_brightness_up:
+          name: Brightness Up — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_4_brightness_up_enabled:
+          name: Brightness Up — enabled
+          default: true
+          selector:
+            boolean: {}
+        channel_4_custom_brightness_down:
+          name: Brightness Down — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_4_brightness_down_enabled:
+          name: Brightness Down — enabled
+          default: true
+          selector:
+            boolean: {}
+        channel_4_custom_colortemp_up:
+          name: Colortemp Up — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_4_colortemp_up_enabled:
+          name: Colortemp Up — enabled
+          default: true
+          selector:
+            boolean: {}
+        channel_4_custom_colortemp_down:
+          name: Colortemp Down — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_4_colortemp_down_enabled:
+          name: Colortemp Down — enabled
+          default: true
+          selector:
+            boolean: {}
+    blue_1:
+      name: Mode 2 — BLUE LED — Channel 1 (top / 12)
+      description: Independent blue profile. Hardware mode names do not restrict the target category. Start = lights
+        on / audio play / cover open. Stop = lights off / audio pause / cover STOP. Rotation follows the selected
+        function.
+      collapsed: true
+      input:
+        blue_channel_1_usage:
+          name: Control type
+          description: Choose a target category, or Automatic / mixed to dispatch by entity domain. Custom actions
+            bypass automatic control. Climate defaults change a single target temperature only; assign power/mode
+            actions explicitly if needed.
+          default: auto
+          selector:
+            select:
+              options:
+              - label: Automatic / mixed targets
+                value: auto
+              - label: Lighting
+                value: light
+              - label: Audio / music
+                value: media_player
+              - label: Curtains / blinds
+                value: cover
+              - label: Climate setpoint
+                value: climate
+              - label: Numeric controls
+                value: numeric
+              - label: Custom actions only
+                value: custom
+        blue_channel_1_targets:
+          name: Targets
+          description: Any combination of lights, media players, covers, climate or number entities.
+          default: []
+          selector:
+            entity:
+              filter:
+              - domain: light
+              - domain: media_player
+              - domain: cover
+              - domain: climate
+              - domain: number
+              - domain: input_number
+              multiple: true
+        blue_channel_1_group_mode:
+          name: Group mode — Synchronized / Relative
+          description: 'Synchronized: same requested level per property, using the first eligible target as reference.
+            Relative: adjust each target from its own level. Selection applies only to this channel.'
+          default: relative
+          selector:
+            select:
+              options:
+              - label: Synchronized — common level
+                value: synchronized
+              - label: Relative — individual levels
+                value: relative
+        blue_channel_1_brightness_step:
+          name: Brightness step
+          default: 5
+          selector:
+            number:
+              min: 1
+              max: 100
+              step: 1
+              mode: box
+              unit_of_measurement: '%'
+        blue_channel_1_cct_step:
+          name: CCT step (Kelvin)
+          default: 150
+          selector:
+            number:
+              min: 25
+              max: 2000
+              step: 25
+              mode: box
+              unit_of_measurement: K
+        blue_channel_1_volume_step:
+          name: Volume step
+          default: 5
+          selector:
+            number:
+              min: 1
+              max: 100
+              step: 1
+              mode: box
+              unit_of_measurement: '%'
+        blue_channel_1_cover_step:
+          name: Cover-position step
+          default: 10
+          selector:
+            number:
+              min: 1
+              max: 100
+              step: 1
+              mode: box
+              unit_of_measurement: '%'
+        blue_channel_1_temperature_step:
+          name: Climate temperature step
+          default: 0.5
+          selector:
+            number:
+              min: 0.1
+              max: 10
+              step: 0.1
+              mode: box
+        blue_channel_1_numeric_step:
+          name: Number step
+          default: 1
+          selector:
+            number:
+              min: 0.01
+              max: 1000
+              step: 0.01
+              mode: box
+        blue_channel_1_reverse:
+          name: Reverse increase/decrease direction
+          default: false
+          selector:
+            boolean: {}
+        blue_channel_1_rotation:
+          name: Rotation function
+          description: 'Primary: brightness / volume / cover position / climate setpoint / number, according to
+            target type. Secondary: light CCT or audio next/previous track. Blue mode has one rotation gesture;
+            this selects its function.'
+          default: primary
+          selector:
+            select:
+              options:
+              - label: Primary level control
+                value: primary
+              - label: Secondary — CCT / audio tracks
+                value: secondary
+        channel_1_custom_start:
+          name: Start — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_1_start_enabled:
+          name: Start — enabled
+          default: true
+          selector:
+            boolean: {}
+        channel_1_custom_stop:
+          name: Stop — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_1_stop_enabled:
+          name: Stop — enabled
+          default: true
+          selector:
+            boolean: {}
+        channel_1_custom_position_open:
+          name: Position Open — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_1_position_open_enabled:
+          name: Position Open — enabled
+          default: true
+          selector:
+            boolean: {}
+        channel_1_custom_position_close:
+          name: Position Close — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_1_position_close_enabled:
+          name: Position Close — enabled
+          default: true
+          selector:
+            boolean: {}
+    blue_2:
+      name: Mode 2 — BLUE LED — Channel 2 (left / 9)
+      description: Independent blue profile. Hardware mode names do not restrict the target category. Start = lights
+        on / audio play / cover open. Stop = lights off / audio pause / cover STOP. Rotation follows the selected
+        function.
+      collapsed: true
+      input:
+        blue_channel_2_usage:
+          name: Control type
+          description: Choose a target category, or Automatic / mixed to dispatch by entity domain. Custom actions
+            bypass automatic control. Climate defaults change a single target temperature only; assign power/mode
+            actions explicitly if needed.
+          default: auto
+          selector:
+            select:
+              options:
+              - label: Automatic / mixed targets
+                value: auto
+              - label: Lighting
+                value: light
+              - label: Audio / music
+                value: media_player
+              - label: Curtains / blinds
+                value: cover
+              - label: Climate setpoint
+                value: climate
+              - label: Numeric controls
+                value: numeric
+              - label: Custom actions only
+                value: custom
+        blue_channel_2_targets:
+          name: Targets
+          default: []
+          selector:
+            entity:
+              filter:
+              - domain: light
+              - domain: media_player
+              - domain: cover
+              - domain: climate
+              - domain: number
+              - domain: input_number
+              multiple: true
+        blue_channel_2_group_mode:
+          name: Group mode — Synchronized / Relative
+          description: 'Synchronized: same requested level per property, using the first eligible target as reference.
+            Relative: adjust each target from its own level. Selection applies only to this channel.'
+          default: relative
+          selector:
+            select:
+              options:
+              - label: Synchronized — common level
+                value: synchronized
+              - label: Relative — individual levels
+                value: relative
+        blue_channel_2_brightness_step:
+          name: Brightness step
+          default: 5
+          selector:
+            number:
+              min: 1
+              max: 100
+              step: 1
+              mode: box
+              unit_of_measurement: '%'
+        blue_channel_2_cct_step:
+          name: CCT step (Kelvin)
+          default: 150
+          selector:
+            number:
+              min: 25
+              max: 2000
+              step: 25
+              mode: box
+              unit_of_measurement: K
+        blue_channel_2_volume_step:
+          name: Volume step
+          default: 5
+          selector:
+            number:
+              min: 1
+              max: 100
+              step: 1
+              mode: box
+              unit_of_measurement: '%'
+        blue_channel_2_cover_step:
+          name: Cover-position step
+          default: 10
+          selector:
+            number:
+              min: 1
+              max: 100
+              step: 1
+              mode: box
+              unit_of_measurement: '%'
+        blue_channel_2_temperature_step:
+          name: Climate temperature step
+          default: 0.5
+          selector:
+            number:
+              min: 0.1
+              max: 10
+              step: 0.1
+              mode: box
+        blue_channel_2_numeric_step:
+          name: Number step
+          default: 1
+          selector:
+            number:
+              min: 0.01
+              max: 1000
+              step: 0.01
+              mode: box
+        blue_channel_2_reverse:
+          name: Reverse increase/decrease direction
+          default: false
+          selector:
+            boolean: {}
+        blue_channel_2_rotation:
+          name: Rotation function
+          description: 'Primary: brightness / volume / cover position / climate setpoint / number, according to
+            target type. Secondary: light CCT or audio next/previous track. Blue mode has one rotation gesture;
+            this selects its function.'
+          default: primary
+          selector:
+            select:
+              options:
+              - label: Primary level control
+                value: primary
+              - label: Secondary — CCT / audio tracks
+                value: secondary
+        channel_2_custom_start:
+          name: Start — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_2_start_enabled:
+          name: Start — enabled
+          default: true
+          selector:
+            boolean: {}
+        channel_2_custom_stop:
+          name: Stop — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_2_stop_enabled:
+          name: Stop — enabled
+          default: true
+          selector:
+            boolean: {}
+        channel_2_custom_position_open:
+          name: Position Open — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_2_position_open_enabled:
+          name: Position Open — enabled
+          default: true
+          selector:
+            boolean: {}
+        channel_2_custom_position_close:
+          name: Position Close — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_2_position_close_enabled:
+          name: Position Close — enabled
+          default: true
+          selector:
+            boolean: {}
+    blue_3:
+      name: Mode 2 — BLUE LED — Channel 3 (bottom / 6)
+      description: Independent blue profile. Hardware mode names do not restrict the target category. Start = lights
+        on / audio play / cover open. Stop = lights off / audio pause / cover STOP. Rotation follows the selected
+        function.
+      collapsed: true
+      input:
+        blue_channel_3_usage:
+          name: Control type
+          description: Choose a target category, or Automatic / mixed to dispatch by entity domain. Custom actions
+            bypass automatic control. Climate defaults change a single target temperature only; assign power/mode
+            actions explicitly if needed.
+          default: auto
+          selector:
+            select:
+              options:
+              - label: Automatic / mixed targets
+                value: auto
+              - label: Lighting
+                value: light
+              - label: Audio / music
+                value: media_player
+              - label: Curtains / blinds
+                value: cover
+              - label: Climate setpoint
+                value: climate
+              - label: Numeric controls
+                value: numeric
+              - label: Custom actions only
+                value: custom
+        blue_channel_3_targets:
+          name: Targets
+          default: []
+          selector:
+            entity:
+              filter:
+              - domain: light
+              - domain: media_player
+              - domain: cover
+              - domain: climate
+              - domain: number
+              - domain: input_number
+              multiple: true
+        blue_channel_3_group_mode:
+          name: Group mode — Synchronized / Relative
+          description: 'Synchronized: same requested level per property, using the first eligible target as reference.
+            Relative: adjust each target from its own level. Selection applies only to this channel.'
+          default: relative
+          selector:
+            select:
+              options:
+              - label: Synchronized — common level
+                value: synchronized
+              - label: Relative — individual levels
+                value: relative
+        blue_channel_3_brightness_step:
+          name: Brightness step
+          default: 5
+          selector:
+            number:
+              min: 1
+              max: 100
+              step: 1
+              mode: box
+              unit_of_measurement: '%'
+        blue_channel_3_cct_step:
+          name: CCT step (Kelvin)
+          default: 150
+          selector:
+            number:
+              min: 25
+              max: 2000
+              step: 25
+              mode: box
+              unit_of_measurement: K
+        blue_channel_3_volume_step:
+          name: Volume step
+          default: 5
+          selector:
+            number:
+              min: 1
+              max: 100
+              step: 1
+              mode: box
+              unit_of_measurement: '%'
+        blue_channel_3_cover_step:
+          name: Cover-position step
+          default: 10
+          selector:
+            number:
+              min: 1
+              max: 100
+              step: 1
+              mode: box
+              unit_of_measurement: '%'
+        blue_channel_3_temperature_step:
+          name: Climate temperature step
+          default: 0.5
+          selector:
+            number:
+              min: 0.1
+              max: 10
+              step: 0.1
+              mode: box
+        blue_channel_3_numeric_step:
+          name: Number step
+          default: 1
+          selector:
+            number:
+              min: 0.01
+              max: 1000
+              step: 0.01
+              mode: box
+        blue_channel_3_reverse:
+          name: Reverse increase/decrease direction
+          default: false
+          selector:
+            boolean: {}
+        blue_channel_3_rotation:
+          name: Rotation function
+          description: 'Primary: brightness / volume / cover position / climate setpoint / number, according to
+            target type. Secondary: light CCT or audio next/previous track. Blue mode has one rotation gesture;
+            this selects its function.'
+          default: primary
+          selector:
+            select:
+              options:
+              - label: Primary level control
+                value: primary
+              - label: Secondary — CCT / audio tracks
+                value: secondary
+        channel_3_custom_start:
+          name: Start — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_3_start_enabled:
+          name: Start — enabled
+          default: true
+          selector:
+            boolean: {}
+        channel_3_custom_stop:
+          name: Stop — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_3_stop_enabled:
+          name: Stop — enabled
+          default: true
+          selector:
+            boolean: {}
+        channel_3_custom_position_open:
+          name: Position Open — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_3_position_open_enabled:
+          name: Position Open — enabled
+          default: true
+          selector:
+            boolean: {}
+        channel_3_custom_position_close:
+          name: Position Close — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_3_position_close_enabled:
+          name: Position Close — enabled
+          default: true
+          selector:
+            boolean: {}
+    blue_4:
+      name: Mode 2 — BLUE LED — Channel 4 (right / 3)
+      description: Independent blue profile. Hardware mode names do not restrict the target category. Start = lights
+        on / audio play / cover open. Stop = lights off / audio pause / cover STOP. Rotation follows the selected
+        function.
+      collapsed: true
+      input:
+        blue_channel_4_usage:
+          name: Control type
+          description: Choose a target category, or Automatic / mixed to dispatch by entity domain. Custom actions
+            bypass automatic control. Climate defaults change a single target temperature only; assign power/mode
+            actions explicitly if needed.
+          default: auto
+          selector:
+            select:
+              options:
+              - label: Automatic / mixed targets
+                value: auto
+              - label: Lighting
+                value: light
+              - label: Audio / music
+                value: media_player
+              - label: Curtains / blinds
+                value: cover
+              - label: Climate setpoint
+                value: climate
+              - label: Numeric controls
+                value: numeric
+              - label: Custom actions only
+                value: custom
+        blue_channel_4_targets:
+          name: Targets
+          default: []
+          selector:
+            entity:
+              filter:
+              - domain: light
+              - domain: media_player
+              - domain: cover
+              - domain: climate
+              - domain: number
+              - domain: input_number
+              multiple: true
+        blue_channel_4_group_mode:
+          name: Group mode — Synchronized / Relative
+          description: 'Synchronized: same requested level per property, using the first eligible target as reference.
+            Relative: adjust each target from its own level. Selection applies only to this channel.'
+          default: relative
+          selector:
+            select:
+              options:
+              - label: Synchronized — common level
+                value: synchronized
+              - label: Relative — individual levels
+                value: relative
+        blue_channel_4_brightness_step:
+          name: Brightness step
+          default: 5
+          selector:
+            number:
+              min: 1
+              max: 100
+              step: 1
+              mode: box
+              unit_of_measurement: '%'
+        blue_channel_4_cct_step:
+          name: CCT step (Kelvin)
+          default: 150
+          selector:
+            number:
+              min: 25
+              max: 2000
+              step: 25
+              mode: box
+              unit_of_measurement: K
+        blue_channel_4_volume_step:
+          name: Volume step
+          default: 5
+          selector:
+            number:
+              min: 1
+              max: 100
+              step: 1
+              mode: box
+              unit_of_measurement: '%'
+        blue_channel_4_cover_step:
+          name: Cover-position step
+          default: 10
+          selector:
+            number:
+              min: 1
+              max: 100
+              step: 1
+              mode: box
+              unit_of_measurement: '%'
+        blue_channel_4_temperature_step:
+          name: Climate temperature step
+          default: 0.5
+          selector:
+            number:
+              min: 0.1
+              max: 10
+              step: 0.1
+              mode: box
+        blue_channel_4_numeric_step:
+          name: Number step
+          default: 1
+          selector:
+            number:
+              min: 0.01
+              max: 1000
+              step: 0.01
+              mode: box
+        blue_channel_4_reverse:
+          name: Reverse increase/decrease direction
+          default: false
+          selector:
+            boolean: {}
+        blue_channel_4_rotation:
+          name: Rotation function
+          description: 'Primary: brightness / volume / cover position / climate setpoint / number, according to
+            target type. Secondary: light CCT or audio next/previous track. Blue mode has one rotation gesture;
+            this selects its function.'
+          default: primary
+          selector:
+            select:
+              options:
+              - label: Primary level control
+                value: primary
+              - label: Secondary — CCT / audio tracks
+                value: secondary
+        channel_4_custom_start:
+          name: Start — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_4_start_enabled:
+          name: Start — enabled
+          default: true
+          selector:
+            boolean: {}
+        channel_4_custom_stop:
+          name: Stop — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_4_stop_enabled:
+          name: Stop — enabled
+          default: true
+          selector:
+            boolean: {}
+        channel_4_custom_position_open:
+          name: Position Open — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_4_position_open_enabled:
+          name: Position Open — enabled
+          default: true
+          selector:
+            boolean: {}
+        channel_4_custom_position_close:
+          name: Position Close — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_4_position_close_enabled:
+          name: Position Close — enabled
+          default: true
+          selector:
+            boolean: {}
+    red_1:
+      name: Scene — RED LED — Button 1
+      description: Receives scene_1 only. No rotation events. Select any Home Assistant actions below.
+      collapsed: true
+      input:
+        channel_1_custom_scene:
+          name: Scene — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_1_scene_enabled:
+          name: Scene — enabled
+          default: true
+          selector:
+            boolean: {}
+    red_2:
+      name: Scene — RED LED — Button 2
+      description: Receives scene_2 only. No rotation events. Select any Home Assistant actions below.
+      collapsed: true
+      input:
+        channel_2_custom_scene:
+          name: Scene — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_2_scene_enabled:
+          name: Scene — enabled
+          default: true
+          selector:
+            boolean: {}
+    red_3:
+      name: Scene — RED LED — Button 3
+      description: Receives scene_3 only. No rotation events. Select any Home Assistant actions below.
+      collapsed: true
+      input:
+        channel_3_custom_scene:
+          name: Scene — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_3_scene_enabled:
+          name: Scene — enabled
+          default: true
+          selector:
+            boolean: {}
+    red_4:
+      name: Scene — RED LED — Button 4
+      description: Receives scene_4 only. No rotation events. Select any Home Assistant actions below.
+      collapsed: true
+      input:
+        channel_4_custom_scene:
+          name: Scene — custom actions
+          description: Optional override. Leave empty for automatic handling.
+          default: []
+          selector:
+            action: {}
+        channel_4_scene_enabled:
+          name: Scene — enabled
+          default: true
+          selector:
+            boolean: {}
+mode: single
+max_exceeded: silent
+trace:
+  stored_traces: 20
+variables:
+  enabled: !input 'enabled'
+  wake_lights: !input 'wake_lights'
+  c1_targets: !input 'channel_1_targets'
+  c1_brightness_step: !input 'channel_1_brightness_step'
+  c1_cct_step: !input 'channel_1_cct_step'
+  c1_volume_step: !input 'channel_1_volume_step'
+  c1_cover_step: !input 'channel_1_cover_step'
+  c1_temperature_step: !input 'channel_1_temperature_step'
+  c1_numeric_step: !input 'channel_1_numeric_step'
+  c1_reverse: !input 'channel_1_reverse'
+  custom_1_on: !input 'channel_1_custom_press'
+  channel_1_on_enabled: !input 'channel_1_on_enabled'
+  custom_1_off: !input 'channel_1_custom_off'
+  channel_1_off_enabled: !input 'channel_1_off_enabled'
+  custom_1_brightness_up: !input 'channel_1_custom_brightness_up'
+  channel_1_brightness_up_enabled: !input 'channel_1_brightness_up_enabled'
+  custom_1_brightness_down: !input 'channel_1_custom_brightness_down'
+  channel_1_brightness_down_enabled: !input 'channel_1_brightness_down_enabled'
+  custom_1_colortemp_up: !input 'channel_1_custom_colortemp_up'
+  channel_1_colortemp_up_enabled: !input 'channel_1_colortemp_up_enabled'
+  custom_1_colortemp_down: !input 'channel_1_custom_colortemp_down'
+  channel_1_colortemp_down_enabled: !input 'channel_1_colortemp_down_enabled'
+  custom_1_start: !input 'channel_1_custom_start'
+  channel_1_start_enabled: !input 'channel_1_start_enabled'
+  custom_1_stop: !input 'channel_1_custom_stop'
+  channel_1_stop_enabled: !input 'channel_1_stop_enabled'
+  custom_1_position_open: !input 'channel_1_custom_position_open'
+  channel_1_position_open_enabled: !input 'channel_1_position_open_enabled'
+  custom_1_position_close: !input 'channel_1_custom_position_close'
+  channel_1_position_close_enabled: !input 'channel_1_position_close_enabled'
+  custom_1_scene: !input 'channel_1_custom_scene'
+  channel_1_scene_enabled: !input 'channel_1_scene_enabled'
+  c2_targets: !input 'channel_2_targets'
+  c2_brightness_step: !input 'channel_2_brightness_step'
+  c2_cct_step: !input 'channel_2_cct_step'
+  c2_volume_step: !input 'channel_2_volume_step'
+  c2_cover_step: !input 'channel_2_cover_step'
+  c2_temperature_step: !input 'channel_2_temperature_step'
+  c2_numeric_step: !input 'channel_2_numeric_step'
+  c2_reverse: !input 'channel_2_reverse'
+  custom_2_on: !input 'channel_2_custom_press'
+  channel_2_on_enabled: !input 'channel_2_on_enabled'
+  custom_2_off: !input 'channel_2_custom_off'
+  channel_2_off_enabled: !input 'channel_2_off_enabled'
+  custom_2_brightness_up: !input 'channel_2_custom_brightness_up'
+  channel_2_brightness_up_enabled: !input 'channel_2_brightness_up_enabled'
+  custom_2_brightness_down: !input 'channel_2_custom_brightness_down'
+  channel_2_brightness_down_enabled: !input 'channel_2_brightness_down_enabled'
+  custom_2_colortemp_up: !input 'channel_2_custom_colortemp_up'
+  channel_2_colortemp_up_enabled: !input 'channel_2_colortemp_up_enabled'
+  custom_2_colortemp_down: !input 'channel_2_custom_colortemp_down'
+  channel_2_colortemp_down_enabled: !input 'channel_2_colortemp_down_enabled'
+  custom_2_start: !input 'channel_2_custom_start'
+  channel_2_start_enabled: !input 'channel_2_start_enabled'
+  custom_2_stop: !input 'channel_2_custom_stop'
+  channel_2_stop_enabled: !input 'channel_2_stop_enabled'
+  custom_2_position_open: !input 'channel_2_custom_position_open'
+  channel_2_position_open_enabled: !input 'channel_2_position_open_enabled'
+  custom_2_position_close: !input 'channel_2_custom_position_close'
+  channel_2_position_close_enabled: !input 'channel_2_position_close_enabled'
+  custom_2_scene: !input 'channel_2_custom_scene'
+  channel_2_scene_enabled: !input 'channel_2_scene_enabled'
+  c3_targets: !input 'channel_3_targets'
+  c3_brightness_step: !input 'channel_3_brightness_step'
+  c3_cct_step: !input 'channel_3_cct_step'
+  c3_volume_step: !input 'channel_3_volume_step'
+  c3_cover_step: !input 'channel_3_cover_step'
+  c3_temperature_step: !input 'channel_3_temperature_step'
+  c3_numeric_step: !input 'channel_3_numeric_step'
+  c3_reverse: !input 'channel_3_reverse'
+  custom_3_on: !input 'channel_3_custom_press'
+  channel_3_on_enabled: !input 'channel_3_on_enabled'
+  custom_3_off: !input 'channel_3_custom_off'
+  channel_3_off_enabled: !input 'channel_3_off_enabled'
+  custom_3_brightness_up: !input 'channel_3_custom_brightness_up'
+  channel_3_brightness_up_enabled: !input 'channel_3_brightness_up_enabled'
+  custom_3_brightness_down: !input 'channel_3_custom_brightness_down'
+  channel_3_brightness_down_enabled: !input 'channel_3_brightness_down_enabled'
+  custom_3_colortemp_up: !input 'channel_3_custom_colortemp_up'
+  channel_3_colortemp_up_enabled: !input 'channel_3_colortemp_up_enabled'
+  custom_3_colortemp_down: !input 'channel_3_custom_colortemp_down'
+  channel_3_colortemp_down_enabled: !input 'channel_3_colortemp_down_enabled'
+  custom_3_start: !input 'channel_3_custom_start'
+  channel_3_start_enabled: !input 'channel_3_start_enabled'
+  custom_3_stop: !input 'channel_3_custom_stop'
+  channel_3_stop_enabled: !input 'channel_3_stop_enabled'
+  custom_3_position_open: !input 'channel_3_custom_position_open'
+  channel_3_position_open_enabled: !input 'channel_3_position_open_enabled'
+  custom_3_position_close: !input 'channel_3_custom_position_close'
+  channel_3_position_close_enabled: !input 'channel_3_position_close_enabled'
+  custom_3_scene: !input 'channel_3_custom_scene'
+  channel_3_scene_enabled: !input 'channel_3_scene_enabled'
+  c4_targets: !input 'channel_4_targets'
+  c4_brightness_step: !input 'channel_4_brightness_step'
+  c4_cct_step: !input 'channel_4_cct_step'
+  c4_volume_step: !input 'channel_4_volume_step'
+  c4_cover_step: !input 'channel_4_cover_step'
+  c4_temperature_step: !input 'channel_4_temperature_step'
+  c4_numeric_step: !input 'channel_4_numeric_step'
+  c4_reverse: !input 'channel_4_reverse'
+  custom_4_on: !input 'channel_4_custom_press'
+  channel_4_on_enabled: !input 'channel_4_on_enabled'
+  custom_4_off: !input 'channel_4_custom_off'
+  channel_4_off_enabled: !input 'channel_4_off_enabled'
+  custom_4_brightness_up: !input 'channel_4_custom_brightness_up'
+  channel_4_brightness_up_enabled: !input 'channel_4_brightness_up_enabled'
+  custom_4_brightness_down: !input 'channel_4_custom_brightness_down'
+  channel_4_brightness_down_enabled: !input 'channel_4_brightness_down_enabled'
+  custom_4_colortemp_up: !input 'channel_4_custom_colortemp_up'
+  channel_4_colortemp_up_enabled: !input 'channel_4_colortemp_up_enabled'
+  custom_4_colortemp_down: !input 'channel_4_custom_colortemp_down'
+  channel_4_colortemp_down_enabled: !input 'channel_4_colortemp_down_enabled'
+  custom_4_start: !input 'channel_4_custom_start'
+  channel_4_start_enabled: !input 'channel_4_start_enabled'
+  custom_4_stop: !input 'channel_4_custom_stop'
+  channel_4_stop_enabled: !input 'channel_4_stop_enabled'
+  custom_4_position_open: !input 'channel_4_custom_position_open'
+  channel_4_position_open_enabled: !input 'channel_4_position_open_enabled'
+  custom_4_position_close: !input 'channel_4_custom_position_close'
+  channel_4_position_close_enabled: !input 'channel_4_position_close_enabled'
+  custom_4_scene: !input 'channel_4_custom_scene'
+  channel_4_scene_enabled: !input 'channel_4_scene_enabled'
+  c1_group_mode: !input 'channel_1_group_mode'
+  c2_group_mode: !input 'channel_2_group_mode'
+  c3_group_mode: !input 'channel_3_group_mode'
+  c4_group_mode: !input 'channel_4_group_mode'
+  b1_targets: !input 'blue_channel_1_targets'
+  b1_group_mode: !input 'blue_channel_1_group_mode'
+  b1_brightness_step: !input 'blue_channel_1_brightness_step'
+  b1_cct_step: !input 'blue_channel_1_cct_step'
+  b1_volume_step: !input 'blue_channel_1_volume_step'
+  b1_cover_step: !input 'blue_channel_1_cover_step'
+  b1_temperature_step: !input 'blue_channel_1_temperature_step'
+  b1_numeric_step: !input 'blue_channel_1_numeric_step'
+  b1_reverse: !input 'blue_channel_1_reverse'
+  c1_usage: !input 'channel_1_usage'
+  b1_usage: !input 'blue_channel_1_usage'
+  c1_rotation: !input 'channel_1_rotation'
+  b1_rotation: !input 'blue_channel_1_rotation'
+  b2_targets: !input 'blue_channel_2_targets'
+  b2_group_mode: !input 'blue_channel_2_group_mode'
+  b2_brightness_step: !input 'blue_channel_2_brightness_step'
+  b2_cct_step: !input 'blue_channel_2_cct_step'
+  b2_volume_step: !input 'blue_channel_2_volume_step'
+  b2_cover_step: !input 'blue_channel_2_cover_step'
+  b2_temperature_step: !input 'blue_channel_2_temperature_step'
+  b2_numeric_step: !input 'blue_channel_2_numeric_step'
+  b2_reverse: !input 'blue_channel_2_reverse'
+  c2_usage: !input 'channel_2_usage'
+  b2_usage: !input 'blue_channel_2_usage'
+  c2_rotation: !input 'channel_2_rotation'
+  b2_rotation: !input 'blue_channel_2_rotation'
+  b3_targets: !input 'blue_channel_3_targets'
+  b3_group_mode: !input 'blue_channel_3_group_mode'
+  b3_brightness_step: !input 'blue_channel_3_brightness_step'
+  b3_cct_step: !input 'blue_channel_3_cct_step'
+  b3_volume_step: !input 'blue_channel_3_volume_step'
+  b3_cover_step: !input 'blue_channel_3_cover_step'
+  b3_temperature_step: !input 'blue_channel_3_temperature_step'
+  b3_numeric_step: !input 'blue_channel_3_numeric_step'
+  b3_reverse: !input 'blue_channel_3_reverse'
+  c3_usage: !input 'channel_3_usage'
+  b3_usage: !input 'blue_channel_3_usage'
+  c3_rotation: !input 'channel_3_rotation'
+  b3_rotation: !input 'blue_channel_3_rotation'
+  b4_targets: !input 'blue_channel_4_targets'
+  b4_group_mode: !input 'blue_channel_4_group_mode'
+  b4_brightness_step: !input 'blue_channel_4_brightness_step'
+  b4_cct_step: !input 'blue_channel_4_cct_step'
+  b4_volume_step: !input 'blue_channel_4_volume_step'
+  b4_cover_step: !input 'blue_channel_4_cover_step'
+  b4_temperature_step: !input 'blue_channel_4_temperature_step'
+  b4_numeric_step: !input 'blue_channel_4_numeric_step'
+  b4_reverse: !input 'blue_channel_4_reverse'
+  c4_usage: !input 'channel_4_usage'
+  b4_usage: !input 'blue_channel_4_usage'
+  c4_rotation: !input 'channel_4_rotation'
+  b4_rotation: !input 'blue_channel_4_rotation'
+  action_id: '{{ trigger.id | default("") }}'
+  channel: '{{ action_id.split("_")[1] | int(0) if "_" in action_id else 0 }}'
+  hardware_mode: '{{ "green" if action_id.startswith("light_") else "blue" if action_id.startswith("curtain_") else
+    "red" }}'
+  selected_targets: '{{ ([b1_targets, b2_targets, b3_targets, b4_targets] if hardware_mode == "blue" else [c1_targets,
+    c2_targets, c3_targets, c4_targets])[channel | int - 1] if channel | int in [1,2,3,4] else [] }}'
+  group_mode: '{{ ([b1_group_mode, b2_group_mode, b3_group_mode, b4_group_mode] if hardware_mode == "blue" else
+    [c1_group_mode, c2_group_mode, c3_group_mode, c4_group_mode])[channel | int - 1] if channel | int in [1,2,3,4]
+    else 0 }}'
+  brightness_step: '{{ ([b1_brightness_step, b2_brightness_step, b3_brightness_step, b4_brightness_step] if hardware_mode
+    == "blue" else [c1_brightness_step, c2_brightness_step, c3_brightness_step, c4_brightness_step])[channel | int
+    - 1] if channel | int in [1,2,3,4] else 0 }}'
+  cct_step: '{{ ([b1_cct_step, b2_cct_step, b3_cct_step, b4_cct_step] if hardware_mode == "blue" else [c1_cct_step,
+    c2_cct_step, c3_cct_step, c4_cct_step])[channel | int - 1] if channel | int in [1,2,3,4] else 0 }}'
+  volume_step: '{{ ([b1_volume_step, b2_volume_step, b3_volume_step, b4_volume_step] if hardware_mode == "blue"
+    else [c1_volume_step, c2_volume_step, c3_volume_step, c4_volume_step])[channel | int - 1] if channel | int in
+    [1,2,3,4] else 0 }}'
+  cover_step: '{{ ([b1_cover_step, b2_cover_step, b3_cover_step, b4_cover_step] if hardware_mode == "blue" else
+    [c1_cover_step, c2_cover_step, c3_cover_step, c4_cover_step])[channel | int - 1] if channel | int in [1,2,3,4]
+    else 0 }}'
+  temperature_step: '{{ ([b1_temperature_step, b2_temperature_step, b3_temperature_step, b4_temperature_step] if
+    hardware_mode == "blue" else [c1_temperature_step, c2_temperature_step, c3_temperature_step, c4_temperature_step])[channel
+    | int - 1] if channel | int in [1,2,3,4] else 0 }}'
+  numeric_step: '{{ ([b1_numeric_step, b2_numeric_step, b3_numeric_step, b4_numeric_step] if hardware_mode == "blue"
+    else [c1_numeric_step, c2_numeric_step, c3_numeric_step, c4_numeric_step])[channel | int - 1] if channel | int
+    in [1,2,3,4] else 0 }}'
+  reverse: '{{ ([b1_reverse, b2_reverse, b3_reverse, b4_reverse] if hardware_mode == "blue" else [c1_reverse, c2_reverse,
+    c3_reverse, c4_reverse])[channel | int - 1] if channel | int in [1,2,3,4] else 0 }}'
+  usage: '{{ ([b1_usage, b2_usage, b3_usage, b4_usage] if hardware_mode == "blue" else [c1_usage, c2_usage, c3_usage,
+    c4_usage])[channel | int - 1] if channel | int in [1,2,3,4] else 0 }}'
+  rotation: '{{ ([b1_rotation, b2_rotation, b3_rotation, b4_rotation] if hardware_mode == "blue" else [c1_rotation,
+    c2_rotation, c3_rotation, c4_rotation])[channel | int - 1] if channel | int in [1,2,3,4] else 0 }}'
+  targets: '{% set ns = namespace(ids=[]) %}{% for e in selected_targets %}{% set dom=e.split(''.'')[0] %}{% if
+    usage == ''auto'' or usage == dom or (usage == ''numeric'' and dom in [''number'',''input_number'']) %}{% set
+    ns.ids=ns.ids+[e] %}{% endif %}{% endfor %}{{ ns.ids if hardware_mode != ''red'' else [] }}'
+  raw_operation: '{{ action_id.split("_",2)[2] if action_id.startswith(("light_", "curtain_")) else "scene" }}'
+  operation: '{% set op = raw_operation %}{% if hardware_mode == ''blue'' %}{% set op = {''start'':''on'',''stop'':''off'',''position_open'':''brightness_up'',''position_close'':''brightness_down''}.get(op,op)
+    %}{% endif %}{% if rotation == ''secondary'' and op in [''brightness_up'',''brightness_down''] %}{% set op=op.replace(''brightness'',''colortemp'')
+    %}{% endif %}{{ op }}'
+  direction: '{{ (-1 if operation in ["brightness_down", "colortemp_down", "position_close"] else 1) * (-1 if reverse
+    else 1) }}'
+triggers:
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: light_1_on
+  id: light_1_on
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: light_1_off
+  id: light_1_off
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: light_1_brightness_up
+  id: light_1_brightness_up
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: light_1_brightness_down
+  id: light_1_brightness_down
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: light_1_colortemp_up
+  id: light_1_colortemp_up
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: light_1_colortemp_down
+  id: light_1_colortemp_down
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: curtain_1_start
+  id: curtain_1_start
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: curtain_1_stop
+  id: curtain_1_stop
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: curtain_1_position_open
+  id: curtain_1_position_open
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: curtain_1_position_close
+  id: curtain_1_position_close
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: scene_1
+  id: scene_1
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: light_2_on
+  id: light_2_on
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: light_2_off
+  id: light_2_off
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: light_2_brightness_up
+  id: light_2_brightness_up
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: light_2_brightness_down
+  id: light_2_brightness_down
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: light_2_colortemp_up
+  id: light_2_colortemp_up
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: light_2_colortemp_down
+  id: light_2_colortemp_down
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: curtain_2_start
+  id: curtain_2_start
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: curtain_2_stop
+  id: curtain_2_stop
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: curtain_2_position_open
+  id: curtain_2_position_open
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: curtain_2_position_close
+  id: curtain_2_position_close
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: scene_2
+  id: scene_2
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: light_3_on
+  id: light_3_on
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: light_3_off
+  id: light_3_off
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: light_3_brightness_up
+  id: light_3_brightness_up
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: light_3_brightness_down
+  id: light_3_brightness_down
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: light_3_colortemp_up
+  id: light_3_colortemp_up
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: light_3_colortemp_down
+  id: light_3_colortemp_down
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: curtain_3_start
+  id: curtain_3_start
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: curtain_3_stop
+  id: curtain_3_stop
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: curtain_3_position_open
+  id: curtain_3_position_open
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: curtain_3_position_close
+  id: curtain_3_position_close
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: scene_3
+  id: scene_3
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: light_4_on
+  id: light_4_on
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: light_4_off
+  id: light_4_off
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: light_4_brightness_up
+  id: light_4_brightness_up
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: light_4_brightness_down
+  id: light_4_brightness_down
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: light_4_colortemp_up
+  id: light_4_colortemp_up
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: light_4_colortemp_down
+  id: light_4_colortemp_down
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: curtain_4_start
+  id: curtain_4_start
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: curtain_4_stop
+  id: curtain_4_stop
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: curtain_4_position_open
+  id: curtain_4_position_open
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: curtain_4_position_close
+  id: curtain_4_position_close
+- trigger: device
+  domain: mqtt
+  device_id: !input 'orielis_device'
+  type: action
+  subtype: scene_4
+  id: scene_4
+conditions:
+- condition: template
+  value_template: '{{ enabled and channel | int in [1,2,3,4] }}'
+actions:
+- choose:
+  - conditions: '{{ action_id == "light_1_on" and not channel_1_on_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "light_1_on" and custom_1_on | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_1_custom_press'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "light_1_off" and not channel_1_off_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "light_1_off" and custom_1_off | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_1_custom_off'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "light_1_brightness_up" and not channel_1_brightness_up_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "light_1_brightness_up" and custom_1_brightness_up | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_1_custom_brightness_up'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "light_1_brightness_down" and not channel_1_brightness_down_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "light_1_brightness_down" and custom_1_brightness_down | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_1_custom_brightness_down'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "light_1_colortemp_up" and not channel_1_colortemp_up_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "light_1_colortemp_up" and custom_1_colortemp_up | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_1_custom_colortemp_up'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "light_1_colortemp_down" and not channel_1_colortemp_down_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "light_1_colortemp_down" and custom_1_colortemp_down | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_1_custom_colortemp_down'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "curtain_1_start" and not channel_1_start_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "curtain_1_start" and custom_1_start | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_1_custom_start'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "curtain_1_stop" and not channel_1_stop_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "curtain_1_stop" and custom_1_stop | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_1_custom_stop'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "curtain_1_position_open" and not channel_1_position_open_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "curtain_1_position_open" and custom_1_position_open | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_1_custom_position_open'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "curtain_1_position_close" and not channel_1_position_close_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "curtain_1_position_close" and custom_1_position_close | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_1_custom_position_close'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "scene_1" and not channel_1_scene_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "scene_1" and custom_1_scene | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_1_custom_scene'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "light_2_on" and not channel_2_on_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "light_2_on" and custom_2_on | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_2_custom_press'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "light_2_off" and not channel_2_off_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "light_2_off" and custom_2_off | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_2_custom_off'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "light_2_brightness_up" and not channel_2_brightness_up_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "light_2_brightness_up" and custom_2_brightness_up | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_2_custom_brightness_up'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "light_2_brightness_down" and not channel_2_brightness_down_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "light_2_brightness_down" and custom_2_brightness_down | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_2_custom_brightness_down'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "light_2_colortemp_up" and not channel_2_colortemp_up_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "light_2_colortemp_up" and custom_2_colortemp_up | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_2_custom_colortemp_up'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "light_2_colortemp_down" and not channel_2_colortemp_down_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "light_2_colortemp_down" and custom_2_colortemp_down | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_2_custom_colortemp_down'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "curtain_2_start" and not channel_2_start_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "curtain_2_start" and custom_2_start | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_2_custom_start'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "curtain_2_stop" and not channel_2_stop_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "curtain_2_stop" and custom_2_stop | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_2_custom_stop'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "curtain_2_position_open" and not channel_2_position_open_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "curtain_2_position_open" and custom_2_position_open | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_2_custom_position_open'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "curtain_2_position_close" and not channel_2_position_close_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "curtain_2_position_close" and custom_2_position_close | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_2_custom_position_close'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "scene_2" and not channel_2_scene_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "scene_2" and custom_2_scene | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_2_custom_scene'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "light_3_on" and not channel_3_on_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "light_3_on" and custom_3_on | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_3_custom_press'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "light_3_off" and not channel_3_off_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "light_3_off" and custom_3_off | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_3_custom_off'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "light_3_brightness_up" and not channel_3_brightness_up_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "light_3_brightness_up" and custom_3_brightness_up | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_3_custom_brightness_up'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "light_3_brightness_down" and not channel_3_brightness_down_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "light_3_brightness_down" and custom_3_brightness_down | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_3_custom_brightness_down'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "light_3_colortemp_up" and not channel_3_colortemp_up_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "light_3_colortemp_up" and custom_3_colortemp_up | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_3_custom_colortemp_up'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "light_3_colortemp_down" and not channel_3_colortemp_down_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "light_3_colortemp_down" and custom_3_colortemp_down | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_3_custom_colortemp_down'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "curtain_3_start" and not channel_3_start_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "curtain_3_start" and custom_3_start | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_3_custom_start'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "curtain_3_stop" and not channel_3_stop_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "curtain_3_stop" and custom_3_stop | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_3_custom_stop'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "curtain_3_position_open" and not channel_3_position_open_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "curtain_3_position_open" and custom_3_position_open | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_3_custom_position_open'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "curtain_3_position_close" and not channel_3_position_close_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "curtain_3_position_close" and custom_3_position_close | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_3_custom_position_close'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "scene_3" and not channel_3_scene_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "scene_3" and custom_3_scene | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_3_custom_scene'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "light_4_on" and not channel_4_on_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "light_4_on" and custom_4_on | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_4_custom_press'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "light_4_off" and not channel_4_off_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "light_4_off" and custom_4_off | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_4_custom_off'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "light_4_brightness_up" and not channel_4_brightness_up_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "light_4_brightness_up" and custom_4_brightness_up | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_4_custom_brightness_up'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "light_4_brightness_down" and not channel_4_brightness_down_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "light_4_brightness_down" and custom_4_brightness_down | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_4_custom_brightness_down'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "light_4_colortemp_up" and not channel_4_colortemp_up_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "light_4_colortemp_up" and custom_4_colortemp_up | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_4_custom_colortemp_up'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "light_4_colortemp_down" and not channel_4_colortemp_down_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "light_4_colortemp_down" and custom_4_colortemp_down | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_4_custom_colortemp_down'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "curtain_4_start" and not channel_4_start_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "curtain_4_start" and custom_4_start | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_4_custom_start'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "curtain_4_stop" and not channel_4_stop_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "curtain_4_stop" and custom_4_stop | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_4_custom_stop'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "curtain_4_position_open" and not channel_4_position_open_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "curtain_4_position_open" and custom_4_position_open | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_4_custom_position_open'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "curtain_4_position_close" and not channel_4_position_close_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "curtain_4_position_close" and custom_4_position_close | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_4_custom_position_close'
+    - stop: Custom override completed
+  - conditions: '{{ action_id == "scene_4" and not channel_4_scene_enabled }}'
+    sequence:
+    - stop: This event is disabled
+  - conditions: '{{ action_id == "scene_4" and custom_4_scene | length > 0 }}'
+    sequence:
+    - sequence: !input 'channel_4_custom_scene'
+    - stop: Custom override completed
+- variables:
+    sync_brightness_step_pct: '{% set ns = namespace(members=[], lows=[], highs=[]) %}
+
+      {% if group_mode == ''synchronized'' %}
+
+      {% for entity in targets | unique | list %}
+
+      {% set domain = entity.split(''.'')[0] %}
+
+      {% set features = state_attr(entity,''supported_features'') | int(0) %}
+
+      {% set adjustable = ((state_attr(entity,''supported_color_modes'') or []) | reject(''equalto'',''onoff'')
+      | reject(''equalto'',''unknown'') | list | length) > 0 %}
+
+      {% if states(entity) not in [''unknown'',''unavailable''] and (domain == "light" and operation in ["brightness_up","brightness_down"]
+      and adjustable and (is_state(entity,"on") or wake_lights)) | bool %}
+
+      {% set ns.members = ns.members + [entity] %}
+
+
+      {% endif %}{% endfor %}{% endif %}
+
+      {% if ns.members | length > 0 %}
+
+      {% set entity = ns.members[0] %}
+
+      {% set lo = ns.lows | max if ns.lows else 0 %}
+
+      {% set hi = ns.highs | min if ns.highs else 255 %}
+
+      {% if lo <= hi %}
+
+      {% set cur = state_attr(entity,''brightness'') | float(0) if is_state(entity,''on'') else 0 %}
+
+      {% set value = [lo, [hi, cur + (brightness_step | float * 255 / 100 * direction | int)] | min] | max %}
+
+      {{ dict(valid=true, members=ns.members, value=value | round(0) | int) }}
+
+      {% else %}{{ dict(valid=false, members=ns.members) }}{% endif %}
+
+      {% else %}{{ dict(valid=false, members=[]) }}{% endif %}'
+    sync_color_temp_kelvin: '{% set ns = namespace(members=[], lows=[], highs=[]) %}
+
+      {% if group_mode == ''synchronized'' %}
+
+      {% for entity in targets | unique | list %}
+
+      {% set domain = entity.split(''.'')[0] %}
+
+      {% set features = state_attr(entity,''supported_features'') | int(0) %}
+
+      {% set adjustable = ((state_attr(entity,''supported_color_modes'') or []) | reject(''equalto'',''onoff'')
+      | reject(''equalto'',''unknown'') | list | length) > 0 %}
+
+      {% if states(entity) not in [''unknown'',''unavailable''] and (domain == "light" and operation in ["colortemp_up","colortemp_down"]
+      and "color_temp" in (state_attr(entity,"supported_color_modes") or []) and state_attr(entity,"min_color_temp_kelvin")
+      is number and state_attr(entity,"max_color_temp_kelvin") is number and (is_state(entity,"on") or wake_lights))
+      | bool %}
+
+      {% set ns.members = ns.members + [entity] %}
+
+      {% set ns.lows = ns.lows + [state_attr(entity,''min_color_temp_kelvin'') | float] %}{% set ns.highs = ns.highs
+      + [state_attr(entity,''max_color_temp_kelvin'') | float] %}
+
+      {% endif %}{% endfor %}{% endif %}
+
+      {% if ns.members | length > 0 %}
+
+      {% set entity = ns.members[0] %}
+
+      {% set lo = ns.lows | max if ns.lows else 0 %}
+
+      {% set hi = ns.highs | min if ns.highs else 0 %}
+
+      {% if lo <= hi %}
+
+      {% set cur = state_attr(entity,''color_temp_kelvin'') | float(0) %}{% if cur <= 0 %}{% set m = state_attr(entity,''color_temp'')
+      | float(0) %}{% set cur = 1000000 / m if m > 0 else (lo+hi)/2 %}{% endif %}
+
+      {% set value = [lo, [hi, cur + (cct_step | float * direction | int)] | min] | max %}
+
+      {{ dict(valid=true, members=ns.members, value=value | round(0) | int) }}
+
+      {% else %}{{ dict(valid=false, members=ns.members) }}{% endif %}
+
+      {% else %}{{ dict(valid=false, members=[]) }}{% endif %}'
+    sync_volume_level: '{% set ns = namespace(members=[], lows=[], highs=[]) %}
+
+      {% if group_mode == ''synchronized'' %}
+
+      {% for entity in targets | unique | list %}
+
+      {% set domain = entity.split(''.'')[0] %}
+
+      {% set features = state_attr(entity,''supported_features'') | int(0) %}
+
+      {% set adjustable = ((state_attr(entity,''supported_color_modes'') or []) | reject(''equalto'',''onoff'')
+      | reject(''equalto'',''unknown'') | list | length) > 0 %}
+
+      {% if states(entity) not in [''unknown'',''unavailable''] and (domain == "media_player" and operation in ["brightness_up","brightness_down","position_open","position_close"]
+      and features | bitwise_and(4) and state_attr(entity,"volume_level") is number) | bool %}
+
+      {% set ns.members = ns.members + [entity] %}
+
+
+      {% endif %}{% endfor %}{% endif %}
+
+      {% if ns.members | length > 0 %}
+
+      {% set entity = ns.members[0] %}
+
+      {% set lo = ns.lows | max if ns.lows else 0 %}
+
+      {% set hi = ns.highs | min if ns.highs else 1 %}
+
+      {% if lo <= hi %}
+
+      {% set cur = state_attr(entity,''volume_level'') | float %}
+
+      {% set value = [lo, [hi, cur + (volume_step | float / 100 * direction | int)] | min] | max %}
+
+      {{ dict(valid=true, members=ns.members, value=value) }}
+
+      {% else %}{{ dict(valid=false, members=ns.members) }}{% endif %}
+
+      {% else %}{{ dict(valid=false, members=[]) }}{% endif %}'
+    sync_position: '{% set ns = namespace(members=[], lows=[], highs=[]) %}
+
+      {% if group_mode == ''synchronized'' %}
+
+      {% for entity in targets | unique | list %}
+
+      {% set domain = entity.split(''.'')[0] %}
+
+      {% set features = state_attr(entity,''supported_features'') | int(0) %}
+
+      {% set adjustable = ((state_attr(entity,''supported_color_modes'') or []) | reject(''equalto'',''onoff'')
+      | reject(''equalto'',''unknown'') | list | length) > 0 %}
+
+      {% if states(entity) not in [''unknown'',''unavailable''] and (domain == "cover" and operation in ["position_open","position_close","brightness_up","brightness_down"]
+      and features | bitwise_and(4) and state_attr(entity,"current_position") is number) | bool %}
+
+      {% set ns.members = ns.members + [entity] %}
+
+
+      {% endif %}{% endfor %}{% endif %}
+
+      {% if ns.members | length > 0 %}
+
+      {% set entity = ns.members[0] %}
+
+      {% set lo = ns.lows | max if ns.lows else 0 %}
+
+      {% set hi = ns.highs | min if ns.highs else 100 %}
+
+      {% if lo <= hi %}
+
+      {% set cur = state_attr(entity,''current_position'') | float %}
+
+      {% set value = [lo, [hi, cur + (cover_step | float * direction | int)] | min] | max %}
+
+      {{ dict(valid=true, members=ns.members, value=value | round(0) | int) }}
+
+      {% else %}{{ dict(valid=false, members=ns.members) }}{% endif %}
+
+      {% else %}{{ dict(valid=false, members=[]) }}{% endif %}'
+    sync_temperature: '{% set ns = namespace(members=[], lows=[], highs=[]) %}
+
+      {% if group_mode == ''synchronized'' %}
+
+      {% for entity in targets | unique | list %}
+
+      {% set domain = entity.split(''.'')[0] %}
+
+      {% set features = state_attr(entity,''supported_features'') | int(0) %}
+
+      {% set adjustable = ((state_attr(entity,''supported_color_modes'') or []) | reject(''equalto'',''onoff'')
+      | reject(''equalto'',''unknown'') | list | length) > 0 %}
+
+      {% if states(entity) not in [''unknown'',''unavailable''] and (domain == "climate" and operation in ["brightness_up","brightness_down"]
+      and features | bitwise_and(1) and state_attr(entity,"temperature") is number and state_attr(entity,"min_temp")
+      is number and state_attr(entity,"max_temp") is number) | bool %}
+
+      {% set ns.members = ns.members + [entity] %}
+
+      {% set ns.lows = ns.lows + [state_attr(entity,''min_temp'') | float] %}{% set ns.highs = ns.highs + [state_attr(entity,''max_temp'')
+      | float] %}
+
+      {% endif %}{% endfor %}{% endif %}
+
+      {% if ns.members | length > 0 %}
+
+      {% set entity = ns.members[0] %}
+
+      {% set lo = ns.lows | max if ns.lows else 0 %}
+
+      {% set hi = ns.highs | min if ns.highs else 0 %}
+
+      {% if lo <= hi %}
+
+      {% set cur = state_attr(entity,''temperature'') | float %}
+
+      {% set value = [lo, [hi, cur + (temperature_step | float * direction | int)] | min] | max %}
+
+      {{ dict(valid=true, members=ns.members, value=value) }}
+
+      {% else %}{{ dict(valid=false, members=ns.members) }}{% endif %}
+
+      {% else %}{{ dict(valid=false, members=[]) }}{% endif %}'
+    sync_value: '{% set ns = namespace(members=[], lows=[], highs=[]) %}
+
+      {% if group_mode == ''synchronized'' %}
+
+      {% for entity in targets | unique | list %}
+
+      {% set domain = entity.split(''.'')[0] %}
+
+      {% set features = state_attr(entity,''supported_features'') | int(0) %}
+
+      {% set adjustable = ((state_attr(entity,''supported_color_modes'') or []) | reject(''equalto'',''onoff'')
+      | reject(''equalto'',''unknown'') | list | length) > 0 %}
+
+      {% if states(entity) not in [''unknown'',''unavailable''] and (domain in ["number","input_number"] and operation
+      in ["brightness_up","brightness_down"] and is_number(states(entity)) and state_attr(entity,"min") is number
+      and state_attr(entity,"max") is number) | bool %}
+
+      {% set ns.members = ns.members + [entity] %}
+
+      {% set ns.lows = ns.lows + [state_attr(entity,''min'') | float] %}{% set ns.highs = ns.highs + [state_attr(entity,''max'')
+      | float] %}
+
+      {% endif %}{% endfor %}{% endif %}
+
+      {% if ns.members | length > 0 %}
+
+      {% set entity = ns.members[0] %}
+
+      {% set lo = ns.lows | max if ns.lows else 0 %}
+
+      {% set hi = ns.highs | min if ns.highs else 0 %}
+
+      {% if lo <= hi %}
+
+      {% set cur = states(entity) | float %}
+
+      {% set value = [lo, [hi, cur + (numeric_step | float * direction | int)] | min] | max %}
+
+      {{ dict(valid=true, members=ns.members, value=value) }}
+
+      {% else %}{{ dict(valid=false, members=ns.members) }}{% endif %}
+
+      {% else %}{{ dict(valid=false, members=[]) }}{% endif %}'
+- repeat:
+    for_each: '{{ targets | unique | list }}'
+    sequence:
+    - variables:
+        entity: '{{ repeat.item }}'
+        domain: '{{ entity.split(".")[0] }}'
+        features: '{{ state_attr(entity,"supported_features") | int(0) }}'
+        adjustable: '{{ ((state_attr(entity,"supported_color_modes") or []) | reject("equalto","onoff") | reject("equalto","unknown")
+          | list | length) > 0 }}'
+    - if: '{{ states(entity) not in ["unknown","unavailable"] }}'
+      then:
+      - choose:
+        - conditions: '{{ (domain == "light" and operation == "on" and is_state(entity,"off")) | bool }}'
+          sequence:
+          - action: light.turn_on
+            target:
+              entity_id: '{{ entity }}'
+            continue_on_error: true
+        - conditions: '{{ (domain == "light" and operation == "off" and is_state(entity,"on")) | bool }}'
+          sequence:
+          - action: light.turn_off
+            target:
+              entity_id: '{{ entity }}'
+            continue_on_error: true
+        - conditions: '{{ (domain == "light" and operation in ["brightness_up","brightness_down"] and adjustable
+            and (is_state(entity,"on") or wake_lights)) | bool }}'
+          sequence:
+          - if: '{{ group_mode == ''synchronized'' }}'
+            then:
+            - if: '{{ sync_brightness_step_pct.valid and entity in sync_brightness_step_pct.members }}'
+              then:
+              - action: light.turn_on
+                target: &id001
+                  entity_id: '{{ entity }}'
+                continue_on_error: true
+                data:
+                  brightness: '{{ sync_brightness_step_pct.value }}'
+            else:
+            - action: light.turn_on
+              target: *id001
+              continue_on_error: true
+              data:
+                brightness_step_pct: '{{ brightness_step | float * direction | int }}'
+        - conditions: '{{ (domain == "light" and operation in ["colortemp_up","colortemp_down"] and "color_temp"
+            in (state_attr(entity,"supported_color_modes") or []) and state_attr(entity,"min_color_temp_kelvin")
+            is number and state_attr(entity,"max_color_temp_kelvin") is number and (is_state(entity,"on") or wake_lights))
+            | bool }}'
+          sequence:
+          - if: '{{ group_mode == ''synchronized'' }}'
+            then:
+            - if: '{{ sync_color_temp_kelvin.valid and entity in sync_color_temp_kelvin.members }}'
+              then:
+              - action: light.turn_on
+                target: &id002
+                  entity_id: '{{ entity }}'
+                continue_on_error: true
+                data:
+                  color_temp_kelvin: '{{ sync_color_temp_kelvin.value }}'
+            else:
+            - action: light.turn_on
+              target: *id002
+              continue_on_error: true
+              data:
+                color_temp_kelvin: '{% set lo = state_attr(entity,''min_color_temp_kelvin'') | float(0) %}
+
+                  {% set hi = state_attr(entity,''max_color_temp_kelvin'') | float(0) %}
+
+                  {% set cur = state_attr(entity,''color_temp_kelvin'') | float(0) %}
+
+                  {% if cur <= 0 %}{% set m = state_attr(entity,''color_temp'') | float(0) %}{% set cur = 1000000
+                  / m if m > 0 else (lo+hi)/2 %}{% endif %}
+
+                  {{ [lo, [hi, cur + cct_step | float * direction | int] | min] | max | round(0) | int }}'
+        - conditions: '{{ (domain == "media_player" and operation == "on" and features | bitwise_and(16384)) | bool
+            }}'
+          sequence:
+          - action: media_player.media_play
+            target:
+              entity_id: '{{ entity }}'
+            continue_on_error: true
+        - conditions: '{{ (domain == "media_player" and operation in ["off","stop"] and features | bitwise_and(1))
+            | bool }}'
+          sequence:
+          - action: media_player.media_pause
+            target:
+              entity_id: '{{ entity }}'
+            continue_on_error: true
+        - conditions: '{{ (domain == "media_player" and operation in ["brightness_up","brightness_down","position_open","position_close"]
+            and features | bitwise_and(4) and state_attr(entity,"volume_level") is number) | bool }}'
+          sequence:
+          - if: '{{ group_mode == ''synchronized'' }}'
+            then:
+            - if: '{{ sync_volume_level.valid and entity in sync_volume_level.members }}'
+              then:
+              - action: media_player.volume_set
+                target: &id003
+                  entity_id: '{{ entity }}'
+                continue_on_error: true
+                data:
+                  volume_level: '{{ sync_volume_level.value }}'
+            else:
+            - action: media_player.volume_set
+              target: *id003
+              continue_on_error: true
+              data:
+                volume_level: '{{ [0, [1, state_attr(entity,"volume_level") + volume_step | float / 100 * direction
+                  | int] | min] | max }}'
+        - conditions: '{{ (domain == "media_player" and operation in ["colortemp_up","colortemp_down"] and direction
+            | int == 1 and features | bitwise_and(32)) | bool }}'
+          sequence:
+          - action: media_player.media_next_track
+            target:
+              entity_id: '{{ entity }}'
+            continue_on_error: true
+        - conditions: '{{ (domain == "media_player" and operation in ["colortemp_up","colortemp_down"] and direction
+            | int == -1 and features | bitwise_and(16)) | bool }}'
+          sequence:
+          - action: media_player.media_previous_track
+            target:
+              entity_id: '{{ entity }}'
+            continue_on_error: true
+        - conditions: '{{ (domain == "cover" and operation == "start" and features | bitwise_and(1)) | bool }}'
+          sequence:
+          - action: cover.open_cover
+            target:
+              entity_id: '{{ entity }}'
+            continue_on_error: true
+        - conditions: '{{ (domain == "cover" and operation == "on" and features | bitwise_and(1)) | bool }}'
+          sequence:
+          - action: cover.open_cover
+            target:
+              entity_id: '{{ entity }}'
+            continue_on_error: true
+        - conditions: '{{ (domain == "cover" and operation == "off" and hardware_mode != "blue" and features | bitwise_and(2))
+            | bool }}'
+          sequence:
+          - action: cover.close_cover
+            target:
+              entity_id: '{{ entity }}'
+            continue_on_error: true
+        - conditions: '{{ (domain == "cover" and (operation == "stop" or (operation == "off" and hardware_mode ==
+            "blue")) and features | bitwise_and(8)) | bool }}'
+          sequence:
+          - action: cover.stop_cover
+            target:
+              entity_id: '{{ entity }}'
+            continue_on_error: true
+        - conditions: '{{ (domain == "cover" and operation in ["position_open","position_close","brightness_up","brightness_down"]
+            and features | bitwise_and(4) and state_attr(entity,"current_position") is number) | bool }}'
+          sequence:
+          - if: '{{ group_mode == ''synchronized'' }}'
+            then:
+            - if: '{{ sync_position.valid and entity in sync_position.members }}'
+              then:
+              - action: cover.set_cover_position
+                target: &id004
+                  entity_id: '{{ entity }}'
+                continue_on_error: true
+                data:
+                  position: '{{ sync_position.value }}'
+            else:
+            - action: cover.set_cover_position
+              target: *id004
+              continue_on_error: true
+              data:
+                position: '{{ [0, [100, state_attr(entity,"current_position") + cover_step | float * direction |
+                  int] | min] | max | round(0) | int }}'
+        - conditions: '{{ (domain == "climate" and operation in ["brightness_up","brightness_down"] and features
+            | bitwise_and(1) and state_attr(entity,"temperature") is number and state_attr(entity,"min_temp") is
+            number and state_attr(entity,"max_temp") is number) | bool }}'
+          sequence:
+          - if: '{{ group_mode == ''synchronized'' }}'
+            then:
+            - if: '{{ sync_temperature.valid and entity in sync_temperature.members }}'
+              then:
+              - action: climate.set_temperature
+                target: &id005
+                  entity_id: '{{ entity }}'
+                continue_on_error: true
+                data:
+                  temperature: '{{ sync_temperature.value }}'
+            else:
+            - action: climate.set_temperature
+              target: *id005
+              continue_on_error: true
+              data:
+                temperature: '{{ [state_attr(entity,"min_temp"), [state_attr(entity,"max_temp"), state_attr(entity,"temperature")
+                  + temperature_step | float * direction | int] | min] | max }}'
+        - conditions: '{{ (domain in ["number","input_number"] and operation in ["brightness_up","brightness_down"]
+            and is_number(states(entity)) and state_attr(entity,"min") is number and state_attr(entity,"max") is
+            number) | bool }}'
+          sequence:
+          - if: '{{ group_mode == ''synchronized'' }}'
+            then:
+            - if: '{{ sync_value.valid and entity in sync_value.members }}'
+              then:
+              - action: '{{ domain }}.set_value'
+                target: &id006
+                  entity_id: '{{ entity }}'
+                continue_on_error: true
+                data:
+                  value: '{{ sync_value.value }}'
+            else:
+            - action: '{{ domain }}.set_value'
+              target: *id006
+              continue_on_error: true
+              data:
+                value: '{{ [state_attr(entity,"min"), [state_attr(entity,"max"), states(entity) | float + numeric_step
+                  | float * direction | int] | min] | max }}'
+- delay:
+    seconds: !input 'event_cooldown'
