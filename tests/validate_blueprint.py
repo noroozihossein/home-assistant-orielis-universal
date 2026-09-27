@@ -12,6 +12,7 @@ async def main():
  await er.async_load(h)
  bp=Blueprint(load_yaml(str(Path(__file__).resolve().parents[1] / 'mrsmart_orielis_universal.yaml')),expected_domain='automation',schema=AUTOMATION_BLUEPRINT_SCHEMA)
  assert not bp.validate()
+ print('TEST FILE:', Path(__file__).resolve().parents[1] / 'mrsmart_orielis_universal.yaml')
  calls=[]; tests=0
  @callback
  def svc(c):calls.append((c.domain+'.'+c.service,dict(c.data)))
@@ -34,7 +35,7 @@ async def main():
  light()
  for n in range(1,5):
   opts={f'channel_{n}_targets':['light.a']}
-  r=await run(f'light_{n}_brightness_up',**opts);assert r[0][1]['brightness_step_pct']==5,r
+  r=await run(f'light_{n}_brightness_up',**opts);assert r[0][1]['brightness']==133,r
   r=await run(f'light_{n}_colortemp_down',**opts);assert r[0][1]['color_temp_kelvin']==2700,r
   for e in ['on','off','brightness_up','brightness_down','colortemp_up','colortemp_down','start','stop','position_open','position_close','scene']:
    a=f'scene_{n}' if e=='scene' else f'{"curtain" if e in ["start","stop","position_open","position_close"] else "light"}_{n}_{e}'
@@ -48,7 +49,7 @@ async def main():
  assert not await run('light_1_brightness_up',enabled=False,channel_1_targets=['light.a'])
  state('light.simple','on',supported_color_modes=['onoff']);state('light.dead','unavailable')
  assert not await run('light_1_colortemp_up',channel_1_targets=['light.simple','light.dead'])
- r=await run('light_1_brightness_up',channel_1_targets=['light.a','light.dead','light.a'],channel_1_reverse=True,channel_1_brightness_step=10);assert len(r)==1 and r[0][1]['brightness_step_pct']==-10
+ r=await run('light_1_brightness_up',channel_1_targets=['light.a','light.dead','light.a'],channel_1_reverse=True,channel_1_brightness_step=10);assert len(r)==1 and r[0][1]['brightness']==94
  state('media_player.a','playing',volume_level=.98,supported_features=1+4+16+32+16384)
  r=await run('light_1_brightness_up',channel_1_targets=['media_player.a']);assert r[0][1]['volume_level']==1
  for a,svcname in [('on','media_play'),('off','media_pause'),('colortemp_up','media_next_track'),('colortemp_down','media_previous_track')]:
@@ -135,8 +136,8 @@ async def main():
   r=await run(f'curtain_{n}_stop',**opts);assert len(r)==2 and all(x[0]=='media_player.media_pause' for x in r),r
   r=await run(f'light_{n}_brightness_up',**opts);assert len(r)==1 and r[0][0]=='light.turn_on',r
   opts={f'blue_channel_{n}_targets':['light.a','light.b'],f'blue_channel_{n}_usage':'light',f'blue_channel_{n}_rotation':'secondary',f'blue_channel_{n}_group_mode':'synchronized'}
-  r=await run(f'curtain_{n}_position_open',**opts);assert len(r)==2 and len({x[1]['color_temp_kelvin'] for x in r})==1,r
-  opts={f'blue_channel_{n}_targets':['climate.a','number.a']}
+  r=await run(f'curtain_{n}_position_open',**opts);assert r==[],r
+  opts={f'blue_channel_{n}_targets':['climate.a','number.a'],f'blue_channel_{n}_usage':'auto'}
   r=await run(f'curtain_{n}_position_close',**opts);assert len(r)==2 and {x[0] for x in r}=={'climate.set_temperature','number.set_value'},r
   assert not await run(f'curtain_{n}_position_open',**{f'channel_{n}_targets':['light.a']})
   assert not await run(f'scene_{n}',**{f'channel_{n}_targets':['light.a'],f'blue_channel_{n}_targets':['media_player.a']})
@@ -153,6 +154,35 @@ async def main():
  h.services.async_register('light','turn_on',fail_one)
  state('light.bad','on',supported_color_modes=['brightness'])
  r=await run('light_1_brightness_up',channel_1_targets=['light.bad','light.a']);assert len(r)==1,r
+
+ # Dimming boundaries: all GREEN channels, both group modes, no zero brightness.
+ h.services.async_register('light','turn_on',svc)
+ for n in range(1,5):
+  for mode in ['relative','synchronized']:
+   for low,high in [(1,100),(10,80),(80,10),(50,50)]:
+    import math
+    lo=math.ceil(min(low,high)*255/100);hi=max(lo,math.floor(max(low,high)*255/100))
+    for current in [0,1,lo,lo+1,hi-1,hi,255]:
+     for direction in [-1,1]:
+      for step in [1,10,100]:
+       for e in ['light.a','light.b']:
+        state(e,'on',brightness=current,supported_color_modes=['brightness'])
+       opts={f'channel_{n}_targets':['light.a','light.b'],f'channel_{n}_group_mode':mode,f'channel_{n}_brightness_min':low,f'channel_{n}_brightness_max':high,f'channel_{n}_brightness_step':step}
+       r=await run(f'light_{n}_brightness_'+('up' if direction==1 else 'down'),**opts)
+       expected=round(max(lo,min(hi,current+step*255/100*direction)))
+       assert len(r)==2 and all(c[0]=='light.turn_on' and c[1]['brightness']==expected and expected>0 for c in r),(n,mode,opts,current,r,expected)
+   state('light.a','on',brightness=5,supported_color_modes=['brightness'])
+   state('light.b','on',brightness=250,supported_color_modes=['brightness'])
+   opts={f'channel_{n}_targets':['light.a','light.b'],f'channel_{n}_group_mode':mode,f'channel_{n}_brightness_min':10,f'channel_{n}_brightness_max':80,f'channel_{n}_brightness_step':10}
+   r=await run(f'light_{n}_brightness_up',**opts)
+   assert [c[1]['brightness'] for c in r]==([30,204] if mode=='relative' else [30,30]),r
+   r=await run(f'light_{n}_off',**opts)
+   assert len(r)==2 and all(c[0]=='light.turn_off' for c in r),r
+  for op in ['start','stop','position_open','position_close']:
+   assert not await run(f'curtain_{n}_{op}',**{f'blue_channel_{n}_targets':['light.a'],f'blue_channel_{n}_usage':'auto'})
+   r=await run(f'curtain_{n}_{op}',**{f'blue_channel_{n}_usage':'custom',f'channel_{n}_custom_{op}':[{'action':'persistent_notification.create','data':{'message':'custom'}}]})
+   assert len(r)==1 and r[0][0]=='persistent_notification.create',r
+
  tests+=2
  print(f'PASS: blueprint + automation schema + recursive actions + {tests} real HA script cases; service endpoints simulated.')
  await h.async_stop()

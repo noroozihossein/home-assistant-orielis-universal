@@ -1,7 +1,7 @@
 blueprint:
   source_url: https://github.com/noroozihossein/home-assistant-orielis-universal/blob/main/mrsmart_orielis_universal.yaml
-  name: Mr Smart — Orielis Three-Mode Universal Controller v0.3.1
-  description: 'Mode 1 GREEN has four light-capable profiles with configurable dimming limits; Mode 2 BLUE has four non-light profiles; Scene RED has four independent
+  name: Mr Smart — Orielis Three-Mode Universal Controller v0.3.0
+  description: 'Mode 1 GREEN and Mode 2 BLUE each have four independent universal profiles; Scene RED has four independent
     action buttons and no rotation. Select control type first, then targets, grouping, steps and optional custom
     overrides. The remote selects its hardware mode; this blueprint routes each actual event automatically. No helpers
     or fixed Zigbee group IDs. Synchronized uses the first eligible target as reference per property and common
@@ -10,12 +10,10 @@ blueprint:
     and Blue start/stop map to audio play/pause; Blue cover start/stop maps to open/STOP. Climate built-ins adjust
     a single setpoint; use custom actions for HVAC modes/power. Numerical target resolution may affect reported
     values. Play/pause commands do not create multiroom clock or track synchronization. One automation per remote.
-    Dimming limits apply to all selected lights in each GREEN channel, only during automatic brightness rotation;
-    manual dashboard changes and custom actions are outside these limits. BLUE defaults to covers; select audio,
-    climate, numeric, mixed or custom explicitly when needed. Existing BLUE lighting targets are ignored; move them
-    to GREEN. BLUE has no separate CCT gesture. Existing event-specific overrides and RED actions keep their IDs. Supports only commands
+    Migration from v0.2.1: existing targets/steps/grouping belong to GREEN; BLUE targets start empty and must be
+    selected separately. Existing event-specific overrides and RED actions keep their IDs. Supports only commands
     actually sent by the remote. The tested device required initial setup on a Tuya hub before light/curtain commands
-    worked; this is not proven universal. Software-tested update; validate hardware behavior on your installation.'
+    worked; this is not proven universal. Software-tested release; confirm hardware behavior before publication.'
   domain: automation
   author: Mr Smart
   homeassistant:
@@ -113,28 +111,6 @@ blueprint:
         channel_1_brightness_step:
           name: Brightness step
           default: 5
-          selector:
-            number:
-              min: 1
-              max: 100
-              step: 1
-              mode: box
-              unit_of_measurement: '%'
-        channel_1_brightness_min:
-          name: Light minimum brightness
-          description: Minimum for all lights selected in this GREEN channel; applies to rotation in synchronized and relative modes. Rotation never switches lights off. Reversed minimum/maximum values are normalized.
-          default: 1
-          selector:
-            number:
-              min: 1
-              max: 100
-              step: 1
-              mode: box
-              unit_of_measurement: '%'
-        channel_1_brightness_max:
-          name: Light maximum brightness
-          description: GREEN dimming never goes above this value.
-          default: 100
           selector:
             number:
               min: 1
@@ -338,28 +314,6 @@ blueprint:
               step: 1
               mode: box
               unit_of_measurement: '%'
-        channel_2_brightness_min:
-          name: Light minimum brightness
-          description: Minimum for all lights selected in this GREEN channel; applies to rotation in synchronized and relative modes. Rotation never switches lights off. Reversed minimum/maximum values are normalized.
-          default: 1
-          selector:
-            number:
-              min: 1
-              max: 100
-              step: 1
-              mode: box
-              unit_of_measurement: '%'
-        channel_2_brightness_max:
-          name: Light maximum brightness
-          description: GREEN dimming never goes above this value.
-          default: 100
-          selector:
-            number:
-              min: 1
-              max: 100
-              step: 1
-              mode: box
-              unit_of_measurement: '%'
         channel_2_cct_step:
           name: CCT step (Kelvin)
           default: 150
@@ -549,28 +503,6 @@ blueprint:
         channel_3_brightness_step:
           name: Brightness step
           default: 5
-          selector:
-            number:
-              min: 1
-              max: 100
-              step: 1
-              mode: box
-              unit_of_measurement: '%'
-        channel_3_brightness_min:
-          name: Light minimum brightness
-          description: Minimum for all lights selected in this GREEN channel; applies to rotation in synchronized and relative modes. Rotation never switches lights off. Reversed minimum/maximum values are normalized.
-          default: 1
-          selector:
-            number:
-              min: 1
-              max: 100
-              step: 1
-              mode: box
-              unit_of_measurement: '%'
-        channel_3_brightness_max:
-          name: Light maximum brightness
-          description: GREEN dimming never goes above this value.
-          default: 100
           selector:
             number:
               min: 1
@@ -774,28 +706,6 @@ blueprint:
               step: 1
               mode: box
               unit_of_measurement: '%'
-        channel_4_brightness_min:
-          name: Light minimum brightness
-          description: Minimum for all lights selected in this GREEN channel; applies to rotation in synchronized and relative modes. Rotation never switches lights off. Reversed minimum/maximum values are normalized.
-          default: 1
-          selector:
-            number:
-              min: 1
-              max: 100
-              step: 1
-              mode: box
-              unit_of_measurement: '%'
-        channel_4_brightness_max:
-          name: Light maximum brightness
-          description: GREEN dimming never goes above this value.
-          default: 100
-          selector:
-            number:
-              min: 1
-              max: 100
-              step: 1
-              mode: box
-              unit_of_measurement: '%'
         channel_4_cct_step:
           name: CCT step (Kelvin)
           default: 150
@@ -929,7 +839,8 @@ blueprint:
             boolean: {}
     blue_1:
       name: Mode 2 — BLUE LED — Channel 1 (top / 12)
-      description: Independent blue profile. Hardware mode names do not restrict the target category. Start = audio play / cover open. Stop = audio pause / cover STOP. Rotation follows the selected
+      description: Independent blue profile. Hardware mode names do not restrict the target category. Start = lights
+        on / audio play / cover open. Stop = lights off / audio pause / cover STOP. Rotation follows the selected
         function.
       collapsed: true
       input:
@@ -938,12 +849,14 @@ blueprint:
           description: Choose a target category, or Automatic / mixed to dispatch by entity domain. Custom actions
             bypass automatic control. Climate defaults change a single target temperature only; assign power/mode
             actions explicitly if needed.
-          default: cover
+          default: auto
           selector:
             select:
               options:
               - label: Automatic / mixed targets
                 value: auto
+              - label: Lighting
+                value: light
               - label: Audio / music
                 value: media_player
               - label: Curtains / blinds
@@ -956,11 +869,12 @@ blueprint:
                 value: custom
         blue_channel_1_targets:
           name: Targets
-          description: Select covers, media players, climate or number entities. Built-in lighting is available in GREEN only.
+          description: Any combination of lights, media players, covers, climate or number entities.
           default: []
           selector:
             entity:
               filter:
+              - domain: light
               - domain: media_player
               - domain: cover
               - domain: climate
@@ -979,6 +893,26 @@ blueprint:
                 value: synchronized
               - label: Relative — individual levels
                 value: relative
+        blue_channel_1_brightness_step:
+          name: Brightness step
+          default: 5
+          selector:
+            number:
+              min: 1
+              max: 100
+              step: 1
+              mode: box
+              unit_of_measurement: '%'
+        blue_channel_1_cct_step:
+          name: CCT step (Kelvin)
+          default: 150
+          selector:
+            number:
+              min: 25
+              max: 2000
+              step: 25
+              mode: box
+              unit_of_measurement: K
         blue_channel_1_volume_step:
           name: Volume step
           default: 5
@@ -1024,8 +958,8 @@ blueprint:
             boolean: {}
         blue_channel_1_rotation:
           name: Rotation function
-          description: 'Primary: volume / cover position / climate setpoint / number, according to
-            target type. Secondary: audio next/previous track. Blue mode has one rotation gesture;
+          description: 'Primary: brightness / volume / cover position / climate setpoint / number, according to
+            target type. Secondary: light CCT or audio next/previous track. Blue mode has one rotation gesture;
             this selects its function.'
           default: primary
           selector:
@@ -1033,7 +967,7 @@ blueprint:
               options:
               - label: Primary level control
                 value: primary
-              - label: Secondary — audio tracks
+              - label: Secondary — CCT / audio tracks
                 value: secondary
         channel_1_custom_start:
           name: Start — custom actions
@@ -1081,7 +1015,8 @@ blueprint:
             boolean: {}
     blue_2:
       name: Mode 2 — BLUE LED — Channel 2 (left / 9)
-      description: Independent blue profile. Hardware mode names do not restrict the target category. Start = audio play / cover open. Stop = audio pause / cover STOP. Rotation follows the selected
+      description: Independent blue profile. Hardware mode names do not restrict the target category. Start = lights
+        on / audio play / cover open. Stop = lights off / audio pause / cover STOP. Rotation follows the selected
         function.
       collapsed: true
       input:
@@ -1090,12 +1025,14 @@ blueprint:
           description: Choose a target category, or Automatic / mixed to dispatch by entity domain. Custom actions
             bypass automatic control. Climate defaults change a single target temperature only; assign power/mode
             actions explicitly if needed.
-          default: cover
+          default: auto
           selector:
             select:
               options:
               - label: Automatic / mixed targets
                 value: auto
+              - label: Lighting
+                value: light
               - label: Audio / music
                 value: media_player
               - label: Curtains / blinds
@@ -1112,6 +1049,7 @@ blueprint:
           selector:
             entity:
               filter:
+              - domain: light
               - domain: media_player
               - domain: cover
               - domain: climate
@@ -1130,6 +1068,26 @@ blueprint:
                 value: synchronized
               - label: Relative — individual levels
                 value: relative
+        blue_channel_2_brightness_step:
+          name: Brightness step
+          default: 5
+          selector:
+            number:
+              min: 1
+              max: 100
+              step: 1
+              mode: box
+              unit_of_measurement: '%'
+        blue_channel_2_cct_step:
+          name: CCT step (Kelvin)
+          default: 150
+          selector:
+            number:
+              min: 25
+              max: 2000
+              step: 25
+              mode: box
+              unit_of_measurement: K
         blue_channel_2_volume_step:
           name: Volume step
           default: 5
@@ -1175,8 +1133,8 @@ blueprint:
             boolean: {}
         blue_channel_2_rotation:
           name: Rotation function
-          description: 'Primary: volume / cover position / climate setpoint / number, according to
-            target type. Secondary: audio next/previous track. Blue mode has one rotation gesture;
+          description: 'Primary: brightness / volume / cover position / climate setpoint / number, according to
+            target type. Secondary: light CCT or audio next/previous track. Blue mode has one rotation gesture;
             this selects its function.'
           default: primary
           selector:
@@ -1184,7 +1142,7 @@ blueprint:
               options:
               - label: Primary level control
                 value: primary
-              - label: Secondary — audio tracks
+              - label: Secondary — CCT / audio tracks
                 value: secondary
         channel_2_custom_start:
           name: Start — custom actions
@@ -1232,7 +1190,8 @@ blueprint:
             boolean: {}
     blue_3:
       name: Mode 2 — BLUE LED — Channel 3 (bottom / 6)
-      description: Independent blue profile. Hardware mode names do not restrict the target category. Start = audio play / cover open. Stop = audio pause / cover STOP. Rotation follows the selected
+      description: Independent blue profile. Hardware mode names do not restrict the target category. Start = lights
+        on / audio play / cover open. Stop = lights off / audio pause / cover STOP. Rotation follows the selected
         function.
       collapsed: true
       input:
@@ -1241,12 +1200,14 @@ blueprint:
           description: Choose a target category, or Automatic / mixed to dispatch by entity domain. Custom actions
             bypass automatic control. Climate defaults change a single target temperature only; assign power/mode
             actions explicitly if needed.
-          default: cover
+          default: auto
           selector:
             select:
               options:
               - label: Automatic / mixed targets
                 value: auto
+              - label: Lighting
+                value: light
               - label: Audio / music
                 value: media_player
               - label: Curtains / blinds
@@ -1263,6 +1224,7 @@ blueprint:
           selector:
             entity:
               filter:
+              - domain: light
               - domain: media_player
               - domain: cover
               - domain: climate
@@ -1281,6 +1243,26 @@ blueprint:
                 value: synchronized
               - label: Relative — individual levels
                 value: relative
+        blue_channel_3_brightness_step:
+          name: Brightness step
+          default: 5
+          selector:
+            number:
+              min: 1
+              max: 100
+              step: 1
+              mode: box
+              unit_of_measurement: '%'
+        blue_channel_3_cct_step:
+          name: CCT step (Kelvin)
+          default: 150
+          selector:
+            number:
+              min: 25
+              max: 2000
+              step: 25
+              mode: box
+              unit_of_measurement: K
         blue_channel_3_volume_step:
           name: Volume step
           default: 5
@@ -1326,8 +1308,8 @@ blueprint:
             boolean: {}
         blue_channel_3_rotation:
           name: Rotation function
-          description: 'Primary: volume / cover position / climate setpoint / number, according to
-            target type. Secondary: audio next/previous track. Blue mode has one rotation gesture;
+          description: 'Primary: brightness / volume / cover position / climate setpoint / number, according to
+            target type. Secondary: light CCT or audio next/previous track. Blue mode has one rotation gesture;
             this selects its function.'
           default: primary
           selector:
@@ -1335,7 +1317,7 @@ blueprint:
               options:
               - label: Primary level control
                 value: primary
-              - label: Secondary — audio tracks
+              - label: Secondary — CCT / audio tracks
                 value: secondary
         channel_3_custom_start:
           name: Start — custom actions
@@ -1383,7 +1365,8 @@ blueprint:
             boolean: {}
     blue_4:
       name: Mode 2 — BLUE LED — Channel 4 (right / 3)
-      description: Independent blue profile. Hardware mode names do not restrict the target category. Start = audio play / cover open. Stop = audio pause / cover STOP. Rotation follows the selected
+      description: Independent blue profile. Hardware mode names do not restrict the target category. Start = lights
+        on / audio play / cover open. Stop = lights off / audio pause / cover STOP. Rotation follows the selected
         function.
       collapsed: true
       input:
@@ -1392,12 +1375,14 @@ blueprint:
           description: Choose a target category, or Automatic / mixed to dispatch by entity domain. Custom actions
             bypass automatic control. Climate defaults change a single target temperature only; assign power/mode
             actions explicitly if needed.
-          default: cover
+          default: auto
           selector:
             select:
               options:
               - label: Automatic / mixed targets
                 value: auto
+              - label: Lighting
+                value: light
               - label: Audio / music
                 value: media_player
               - label: Curtains / blinds
@@ -1414,6 +1399,7 @@ blueprint:
           selector:
             entity:
               filter:
+              - domain: light
               - domain: media_player
               - domain: cover
               - domain: climate
@@ -1432,6 +1418,26 @@ blueprint:
                 value: synchronized
               - label: Relative — individual levels
                 value: relative
+        blue_channel_4_brightness_step:
+          name: Brightness step
+          default: 5
+          selector:
+            number:
+              min: 1
+              max: 100
+              step: 1
+              mode: box
+              unit_of_measurement: '%'
+        blue_channel_4_cct_step:
+          name: CCT step (Kelvin)
+          default: 150
+          selector:
+            number:
+              min: 25
+              max: 2000
+              step: 25
+              mode: box
+              unit_of_measurement: K
         blue_channel_4_volume_step:
           name: Volume step
           default: 5
@@ -1477,8 +1483,8 @@ blueprint:
             boolean: {}
         blue_channel_4_rotation:
           name: Rotation function
-          description: 'Primary: volume / cover position / climate setpoint / number, according to
-            target type. Secondary: audio next/previous track. Blue mode has one rotation gesture;
+          description: 'Primary: brightness / volume / cover position / climate setpoint / number, according to
+            target type. Secondary: light CCT or audio next/previous track. Blue mode has one rotation gesture;
             this selects its function.'
           default: primary
           selector:
@@ -1486,7 +1492,7 @@ blueprint:
               options:
               - label: Primary level control
                 value: primary
-              - label: Secondary — audio tracks
+              - label: Secondary — CCT / audio tracks
                 value: secondary
         channel_4_custom_start:
           name: Start — custom actions
@@ -1605,8 +1611,6 @@ variables:
   wake_lights: !input 'wake_lights'
   c1_targets: !input 'channel_1_targets'
   c1_brightness_step: !input 'channel_1_brightness_step'
-  green_1_brightness_min: !input 'channel_1_brightness_min'
-  green_1_brightness_max: !input 'channel_1_brightness_max'
   c1_cct_step: !input 'channel_1_cct_step'
   c1_volume_step: !input 'channel_1_volume_step'
   c1_cover_step: !input 'channel_1_cover_step'
@@ -1637,8 +1641,6 @@ variables:
   channel_1_scene_enabled: !input 'channel_1_scene_enabled'
   c2_targets: !input 'channel_2_targets'
   c2_brightness_step: !input 'channel_2_brightness_step'
-  green_2_brightness_min: !input 'channel_2_brightness_min'
-  green_2_brightness_max: !input 'channel_2_brightness_max'
   c2_cct_step: !input 'channel_2_cct_step'
   c2_volume_step: !input 'channel_2_volume_step'
   c2_cover_step: !input 'channel_2_cover_step'
@@ -1669,8 +1671,6 @@ variables:
   channel_2_scene_enabled: !input 'channel_2_scene_enabled'
   c3_targets: !input 'channel_3_targets'
   c3_brightness_step: !input 'channel_3_brightness_step'
-  green_3_brightness_min: !input 'channel_3_brightness_min'
-  green_3_brightness_max: !input 'channel_3_brightness_max'
   c3_cct_step: !input 'channel_3_cct_step'
   c3_volume_step: !input 'channel_3_volume_step'
   c3_cover_step: !input 'channel_3_cover_step'
@@ -1701,8 +1701,6 @@ variables:
   channel_3_scene_enabled: !input 'channel_3_scene_enabled'
   c4_targets: !input 'channel_4_targets'
   c4_brightness_step: !input 'channel_4_brightness_step'
-  green_4_brightness_min: !input 'channel_4_brightness_min'
-  green_4_brightness_max: !input 'channel_4_brightness_max'
   c4_cct_step: !input 'channel_4_cct_step'
   c4_volume_step: !input 'channel_4_volume_step'
   c4_cover_step: !input 'channel_4_cover_step'
@@ -1737,8 +1735,8 @@ variables:
   c4_group_mode: !input 'channel_4_group_mode'
   b1_targets: !input 'blue_channel_1_targets'
   b1_group_mode: !input 'blue_channel_1_group_mode'
-  b1_brightness_step: 5
-  b1_cct_step: 150
+  b1_brightness_step: !input 'blue_channel_1_brightness_step'
+  b1_cct_step: !input 'blue_channel_1_cct_step'
   b1_volume_step: !input 'blue_channel_1_volume_step'
   b1_cover_step: !input 'blue_channel_1_cover_step'
   b1_temperature_step: !input 'blue_channel_1_temperature_step'
@@ -1750,8 +1748,8 @@ variables:
   b1_rotation: !input 'blue_channel_1_rotation'
   b2_targets: !input 'blue_channel_2_targets'
   b2_group_mode: !input 'blue_channel_2_group_mode'
-  b2_brightness_step: 5
-  b2_cct_step: 150
+  b2_brightness_step: !input 'blue_channel_2_brightness_step'
+  b2_cct_step: !input 'blue_channel_2_cct_step'
   b2_volume_step: !input 'blue_channel_2_volume_step'
   b2_cover_step: !input 'blue_channel_2_cover_step'
   b2_temperature_step: !input 'blue_channel_2_temperature_step'
@@ -1763,8 +1761,8 @@ variables:
   b2_rotation: !input 'blue_channel_2_rotation'
   b3_targets: !input 'blue_channel_3_targets'
   b3_group_mode: !input 'blue_channel_3_group_mode'
-  b3_brightness_step: 5
-  b3_cct_step: 150
+  b3_brightness_step: !input 'blue_channel_3_brightness_step'
+  b3_cct_step: !input 'blue_channel_3_cct_step'
   b3_volume_step: !input 'blue_channel_3_volume_step'
   b3_cover_step: !input 'blue_channel_3_cover_step'
   b3_temperature_step: !input 'blue_channel_3_temperature_step'
@@ -1776,8 +1774,8 @@ variables:
   b3_rotation: !input 'blue_channel_3_rotation'
   b4_targets: !input 'blue_channel_4_targets'
   b4_group_mode: !input 'blue_channel_4_group_mode'
-  b4_brightness_step: 5
-  b4_cct_step: 150
+  b4_brightness_step: !input 'blue_channel_4_brightness_step'
+  b4_cct_step: !input 'blue_channel_4_cct_step'
   b4_volume_step: !input 'blue_channel_4_volume_step'
   b4_cover_step: !input 'blue_channel_4_cover_step'
   b4_temperature_step: !input 'blue_channel_4_temperature_step'
@@ -1819,12 +1817,8 @@ variables:
     c4_usage])[channel | int - 1] if channel | int in [1,2,3,4] else 0 }}'
   rotation: '{{ ([b1_rotation, b2_rotation, b3_rotation, b4_rotation] if hardware_mode == "blue" else [c1_rotation,
     c2_rotation, c3_rotation, c4_rotation])[channel | int - 1] if channel | int in [1,2,3,4] else 0 }}'
-  profile_brightness_min: '{{ [green_1_brightness_min, green_2_brightness_min, green_3_brightness_min, green_4_brightness_min][channel | int - 1] if hardware_mode == "green" and channel | int in [1,2,3,4] else 1 }}'
-  profile_brightness_max: '{{ [green_1_brightness_max, green_2_brightness_max, green_3_brightness_max, green_4_brightness_max][channel | int - 1] if hardware_mode == "green" and channel | int in [1,2,3,4] else 100 }}'
-  brightness_floor: '{{ ([profile_brightness_min | float, profile_brightness_max | float] | min * 255 / 100) | round(0,"ceil") | int }}'
-  brightness_ceiling: '{{ [brightness_floor | int, ([profile_brightness_min | float, profile_brightness_max | float] | max * 255 / 100) | round(0,"floor") | int] | max }}'
   targets: '{% set ns = namespace(ids=[]) %}{% for e in selected_targets %}{% set dom=e.split(''.'')[0] %}{% if
-    (hardware_mode != ''blue'' or dom != ''light'') and (usage == ''auto'' or usage == dom or (usage == ''numeric'' and dom in [''number'',''input_number''])) %}{% set
+    usage == ''auto'' or usage == dom or (usage == ''numeric'' and dom in [''number'',''input_number'']) %}{% set
     ns.ids=ns.ids+[e] %}{% endif %}{% endfor %}{{ ns.ids if hardware_mode != ''red'' else [] }}'
   raw_operation: '{{ action_id.split("_",2)[2] if action_id.startswith(("light_", "curtain_")) else "scene" }}'
   operation: '{% set op = raw_operation %}{% if hardware_mode == ''blue'' %}{% set op = {''start'':''on'',''stop'':''off'',''position_open'':''brightness_up'',''position_close'':''brightness_down''}.get(op,op)
@@ -2436,9 +2430,9 @@ actions:
 
       {% set entity = ns.members[0] %}
 
-      {% set lo = brightness_floor | int %}
+      {% set lo = ns.lows | max if ns.lows else 0 %}
 
-      {% set hi = brightness_ceiling | int %}
+      {% set hi = ns.highs | min if ns.highs else 255 %}
 
       {% if lo <= hi %}
 
@@ -2704,7 +2698,7 @@ actions:
               target: *id001
               continue_on_error: true
               data:
-                brightness: '{{ [brightness_floor | int, [brightness_ceiling | int, (state_attr(entity,"brightness") | float(0) if is_state(entity,"on") else 0) + (brightness_step | float * 255 / 100 * direction)] | min] | max | round(0) | int }}'
+                brightness_step_pct: '{{ brightness_step | float * direction | int }}'
         - conditions: '{{ (domain == "light" and operation in ["colortemp_up","colortemp_down"] and "color_temp"
             in (state_attr(entity,"supported_color_modes") or []) and state_attr(entity,"min_color_temp_kelvin")
             is number and state_attr(entity,"max_color_temp_kelvin") is number and (is_state(entity,"on") or wake_lights))

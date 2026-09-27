@@ -1,6 +1,6 @@
 # Mr Smart — Orielis TS0601 Universal Knob Blueprint
 
-**Home Assistant + Zigbee2MQTT · v0.3.0 · by Hossein / Mr Smart**
+**Home Assistant + Zigbee2MQTT · v0.3.1 · by Hossein / Mr Smart**
 
 A GUI-configured Home Assistant automation blueprint for the **Orielis / Tuya TS0601 Smart Scene Knob**, with **eight independent rotary-control profiles and four scene buttons**. Control lighting, CCT, audio volume, blinds, climate setpoints and numeric entities without creating helpers or writing YAML.
 
@@ -34,7 +34,7 @@ Upstream device support and setup: **[official Zigbee2MQTT device page](https://
 | Mode 2 — BLUE LED | Four more independent universal channels | Start/stop press and rotation |
 | Scene — RED LED | Four independent custom-action buttons | `scene_1` to `scene_4` only; **no rotation** |
 
-The hardware calls green “Light” and blue “Curtain”. **Neither mode is restricted to that product category in this blueprint.** For example, Green channel 1 can control a light group, Blue channel 1 can control an amplifier, and Red button 1 can run a leaving-home scene.
+The hardware calls green “Light” and blue “Curtain”. **GREEN supports lighting and other target categories. BLUE defaults to curtains and supports audio, climate, numeric and custom actions; built-in lighting control is deliberately excluded from BLUE in v0.3.1.** For example, Green channel 1 can control a light group, Blue channel 1 can control an amplifier, and Red button 1 can run a leaving-home scene.
 
 Observed button positions: **1 top (12 o'clock), 2 left (9), 3 bottom (6), 4 right (3)**.
 
@@ -42,10 +42,10 @@ Observed button positions: **1 top (12 o'clock), 2 left (9), 3 bottom (6), 4 rig
 
 Each green/blue profile provides:
 
-- Control type: Automatic/mixed, Lighting, Audio/music, Curtains/blinds, Climate setpoint, Numeric, or Custom actions only.
+- Control type: Automatic/mixed, Audio/music, Curtains/blinds, Climate setpoint, Numeric, or Custom actions only. Lighting is available in GREEN only; BLUE defaults to Curtains/blinds.
 - Multiple target entities, with automatic domain/capability filtering.
 - **Synchronized / Relative** group mode, independently selected per profile.
-- Editable brightness %, CCT Kelvin, volume %, cover-position %, temperature and numeric steps.
+- Editable volume %, cover-position %, temperature and numeric steps. GREEN additionally provides brightness %, CCT Kelvin, and minimum/maximum brightness %.
 - Reverse direction and primary/secondary rotation selection.
 - An enable switch and optional custom Home Assistant action sequence for every actual input event.
 
@@ -55,13 +55,13 @@ Custom overrides replace automatic handling for that event. Scene buttons use th
 
 | Target | Primary rotation | Secondary rotation | Green on/off | Blue start/stop |
 |---|---|---|---|---|
-| Light | Brightness | CCT, when supported | On / off | On / off |
+| Light (GREEN only) | Brightness within configured limits | CCT, when supported | On / off | No built-in lighting |
 | Media player | Volume | Next / previous track, when supported | Play / pause | Play / pause |
 | Cover | Position | No built-in action | Open / close | Open / **stop** |
 | Climate | Single target setpoint | No built-in action | Custom actions needed | Custom actions needed |
 | Number / input_number | Numeric value | No built-in action | Custom actions needed | Custom actions needed |
 
-Green's separate `colortemp` gesture continues to select CCT / track control. Blue has one rotation gesture: choose Primary or Secondary in its profile. HVAC modes, fan speed, source selection and other services can be assigned as custom actions; they are not automatic built-ins.
+Green's separate `colortemp` gesture continues to select CCT / track control. Blue has one rotation gesture and no independent CCT event: Primary controls the target level; Secondary selects audio next/previous track. HVAC modes, fan speed, source selection and other services can be assigned as custom actions; they are not automatic built-ins.
 
 ### Group behaviour
 
@@ -90,7 +90,22 @@ https://github.com/noroozihossein/home-assistant-orielis-universal/blob/main/mrs
 
 ### Upgrade from v0.2.x
 
-Back up your automation and replace/re-import the blueprint at the same path. Reload automations and reopen the editor. Existing channel targets, steps and grouping remain associated with **GREEN**. **BLUE targets start empty** and must be selected independently. Existing event-specific custom overrides and RED actions keep their identifiers. Verify the title shows v0.3.0 before saving.
+Back up your automation and replace/re-import the blueprint at the same path. Reload automations and reopen the editor. Existing channel targets, steps and grouping remain associated with **GREEN**. **BLUE targets start empty** and must be selected independently. Existing event-specific custom overrides and RED actions keep their identifiers. Verify the title shows v0.3.1 before saving; apply the v0.3.1 migration notes below.
+
+### Upgrade from v0.3.0 to v0.3.1
+
+Back up the existing blueprint and automation, then replace/re-import the blueprint at the **same path**. Reload automations and reopen the editor. Confirm the title shows **v0.3.1**. Existing GREEN input identifiers, RED actions and event-specific custom overrides are retained.
+
+- Configure **Light minimum brightness** and **Light maximum brightness** independently in each GREEN channel. Defaults are 1% and 100%.
+- These limits apply to **all lights selected in that channel**, not separate limits per individual member. Both Synchronized and Relative modes respect them.
+- Rotation clamps at the minimum/maximum and never requests brightness zero. The off-button action remains available. Limits cover automatic brightness rotation, not dashboard/manual changes, on-button restoration, CCT-only actions, or custom actions.
+- Limits are converted to Home Assistant's integer 1–255 brightness scale. Reversed limits are normalized. Equal limits select a fixed representable value; device/UI rounding may differ slightly.
+- **Move existing BLUE lighting targets to GREEN.** Built-in BLUE dispatch ignores lights, including saved legacy/mixed light targets. BLUE lighting/CCT step inputs were removed.
+- BLUE defaults to Curtains/blinds **for new configurations**. Previously saved Control type values are not automatically rewritten. Explicitly select Curtains/blinds, Audio/music, Climate, Numeric, Automatic/mixed or Custom actions only as needed.
+- BLUE custom event actions still override automatic handling and can call any Home Assistant action chosen by the user. The built-in lighting exclusion does not restrict custom actions.
+- Keep one active automation per remote to avoid duplicate commands.
+
+No experimental BLUE sensitivity settings, additional timers, helpers, fixed Zigbee group IDs or new event queues were added. Trigger definitions, execution mode and cooldown are unchanged from the published v0.3.0 baseline.
 
 ## Important behaviour and troubleshooting
 
@@ -105,7 +120,7 @@ Back up your automation and replace/re-import the blueprint at the same path. Re
 
 ## Validation and scope
 
-The maintainer reported successful light/CCT tests on channels 1 and 2, amplifier volume and play/pause in green mode, and separation of the three modes in v0.3.0. The automated suite passed **190 cases using the actual Home Assistant 2024.12.5 schema/template/script engine with simulated service endpoints**. Those tests are not 190 physical-device tests. See [TESTING.md](TESTING.md).
+The maintainer reported successful light/CCT tests on channels 1 and 2, amplifier volume and play/pause in green mode, and separation of the three modes in v0.3.0. The updated suite passed **1,582 cases using the actual Home Assistant 2024.12.5 schema/template/script engine with simulated service endpoints**. These are software tests, not physical-device tests. v0.3.1 hardware acceptance has not yet been reported; earlier hardware observations refer to v0.3.0. See [TESTING.md](TESTING.md).
 
 ## Project links and search terms
 
@@ -116,3 +131,4 @@ Orielis, Oriolis, Tuya TS0601 smart scene knob, `_TZE284_nj7sfid2`, Home Assista
 Optional sharing hashtags: **#MrSmart #Orielis #Tuya #TS0601 #HomeAssistant #Zigbee2MQTT #Blueprint #RotaryKnob #SmartHome**.
 
 Independent community project; not an official Tuya, Orielis or Home Assistant product. MIT license for this repository's original code and documentation; third-party branding and linked images remain their owners' property.
+
